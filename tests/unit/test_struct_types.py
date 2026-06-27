@@ -2,7 +2,6 @@ from binforge.core.struct_types import (
     Field,
     Struct,
     TableDef,
-    FieldType,
     fixed_str,
     ptr,
     str_ptr,

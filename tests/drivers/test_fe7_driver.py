@@ -4,6 +4,7 @@ The fixture's table is placed at file offset 0, so we use a subclassed
 driver with POINTER_BASE=0 and offset=0 to avoid needing a full ROM.
 """
 
+import struct as _struct
 from pathlib import Path
 
 import pytest
@@ -103,8 +104,6 @@ def test_pack_table_overflow_raises(drv: _FixtureDriver) -> None:
 
 
 # ── str_ptr / TEXT_CODEC integration tests ──────────────────────────────────
-
-import struct as _struct
 
 
 def _make_fe7_str_buf() -> object:

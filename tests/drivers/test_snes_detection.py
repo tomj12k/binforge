@@ -29,7 +29,6 @@ def test_fe5_detect():
 
 def test_fe5_detect_known_header() -> None:
     """Verify FE5Driver detects the documented Thracia 776 header bytes."""
-    import struct
     from pathlib import Path
     from binforge.core.engine import BinaryBuffer
     from binforge.drivers.snes.fe5 import FE5Driver
