@@ -9,7 +9,7 @@ _TABLE: dict[int, str] = {
     0x01: "A",
     0x02: "B",
     0x03: "C",
-    0x04: "",  # private-use newline control code
+    0x04: "",  # private-use newline control code → PUA U+E001
 }
 
 _CODEC = TextCodec(_TABLE)
@@ -45,5 +45,5 @@ def test_roundtrip_all_glyphs() -> None:
 
 
 def test_control_code_roundtrip() -> None:
-    text = "AB"  # newline between A and B
+    text = "AB"  # newline between A and B
     assert _CODEC.decode_bytes(_CODEC.encode(text)) == text

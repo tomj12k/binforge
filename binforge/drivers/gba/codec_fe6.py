@@ -17,8 +17,8 @@ _TABLE: dict[int, str] = {
     0x29: "ら", 0x2A: "り", 0x2B: "る", 0x2C: "れ", 0x2D: "ろ",
     0x2E: "わ", 0x32: "を", 0x33: "ん",
     0x4B: " ",
-    0x6D: "\n",
-    0x80: "",
+    0x6D: "",  # line-break control → PUA U+E001
+    0x80: "",  # end-of-string control → PUA U+E080
 }
 
 FE6_CODEC = TextCodec(_TABLE)

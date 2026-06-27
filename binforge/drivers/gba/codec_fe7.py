@@ -23,8 +23,8 @@ _TABLE: dict[int, str] = {
     0x44: "…",  # …
     0x45: "'",
     0x4B: " ",
-    0x6D: "\n",
-    0x80: "",  # end-of-string control (Private Use Area)
+    0x6D: "",  # line-break control → PUA U+E001
+    0x80: "",  # end-of-string control → PUA U+E080
 }
 
 FE7_CODEC = TextCodec(_TABLE)

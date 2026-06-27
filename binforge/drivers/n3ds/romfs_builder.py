@@ -65,10 +65,10 @@ class RomFSBuilder:
     # ── helpers ──────────────────────────────────────────────────────────────
 
     def _normalise(self, files: dict[str, bytes | None]) -> dict[str, bytes | None]:
-        """Strip leading slashes; detect duplicates after normalisation."""
+        """Strip leading/trailing slashes and collapse repeated separators; detect duplicates."""
         result: dict[str, bytes | None] = {}
         for raw_path, data in files.items():
-            norm = raw_path.lstrip("/")
+            norm = "/".join(p for p in raw_path.split("/") if p)
             if norm in result:
                 raise RomFSBuildError(norm, "duplicate virtual path")
             result[norm] = data
@@ -108,7 +108,7 @@ class RomFSBuilder:
 
         The Level 3 blob layout (all regions 16-byte aligned):
 
-        +0x00  Header (0x28 bytes) — 10 × u32 offsets/sizes
+        +0x00  Header (0x2C bytes) — 11 × u32 offsets/sizes
         then   dir hash table | dir metadata | file hash table | file metadata | file data
 
         Dir metadata has a sentinel entry at offset 0 (0x18 bytes, empty name),

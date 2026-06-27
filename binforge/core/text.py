@@ -28,7 +28,7 @@ class TextCodec:
         for b in data:
             if b == 0x00:
                 break
-            result.append(self._decode_table.get(b, ""))
+            result.append(self._decode_table.get(b, "�"))
         return "".join(result)
 
     def encode(self, text: str) -> bytes:
