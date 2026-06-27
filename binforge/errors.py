@@ -51,3 +51,12 @@ class CommitError(BinforgeError):
     def __init__(self, path: str, reason: str) -> None:
         super().__init__(f"Failed to commit to {path}: {reason}")
         self.path = path
+
+
+class RomFSBuildError(BinforgeError):
+    """Raised when ROMFS container construction fails."""
+
+    def __init__(self, path: str, reason: str) -> None:
+        super().__init__(f"ROMFS build error at '{path}': {reason}")
+        self.path = path
+        self.reason = reason
