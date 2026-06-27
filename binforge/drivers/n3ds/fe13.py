@@ -30,10 +30,17 @@ class FE13Driver(FormatDriver):
     POINTER_BASE = 0x000000
     _PERSON_PATH = _PERSON_PATH
 
+    _JOB_PATH = "GameData/JobData.bin.lz"
+
+    _TABLE_PATHS: dict[str, str] = {
+        "characters": _PERSON_PATH,
+        "classes": "GameData/JobData.bin.lz",
+    }
+
     def __init__(self, buf: BinaryBuffer) -> None:
         super().__init__(buf)
         self._romfs: RomFS | None = None
-        self._person_data: bytes | None = None
+        self._lz_cache: dict[str, bytes] = {}
 
     def detect(self, buf: BinaryBuffer) -> bool:
         """Return True if buf looks like a FE13 ROMFS blob."""
@@ -52,15 +59,19 @@ class FE13Driver(FormatDriver):
         except (DecompressionError, ValueError, OSError, struct.error):
             return False
 
-    def _get_person_data(self) -> bytes:
-        if self._person_data is None:
+    def _get_lz_data(self, romfs_path: str) -> bytes:
+        """Decompress and cache a ROMFS LZ11 file by virtual path."""
+        if romfs_path not in self._lz_cache:
             romfs = RomFS(bytes(self._buf._shadow))
-            compressed = romfs.read_file(_PERSON_PATH)
-            self._person_data = decompress_lz11(compressed)
-        return self._person_data
+            compressed = romfs.read_file(romfs_path)
+            self._lz_cache[romfs_path] = decompress_lz11(compressed)
+        return self._lz_cache[romfs_path]
+
+    def _get_person_data(self) -> bytes:
+        return self._get_lz_data(self._PERSON_PATH)
 
     def tables(self) -> dict[str, TableDef]:
-        """Return table definitions for FE13 character data."""
+        """Return table definitions for FE13 character and class data."""
         return {
             "characters": TableDef(
                 offset=0x00000000,  # offset within decompressed Person.bin
@@ -79,15 +90,26 @@ class FE13Driver(FormatDriver):
                     Field("mov", u8, 0x0C),
                 ],
             ),
+            "classes": TableDef(
+                offset=0x00000000,
+                row_size=96,
+                count=66,
+                fields=[
+                    Field("id", u8, 0x00),
+                    Field("move", u8, 0x08),
+                ],
+            ),
         }
 
     def parse_table(self, name: str) -> list:  # type: ignore[override]
-        """Parse a table from the decompressed Person.bin staging buffer."""
-        person_buf = BinaryBuffer.__new__(BinaryBuffer)
-        person_buf._path = Path("Person.bin")
-        person_buf._shadow = bytearray(self._get_person_data())
+        """Parse a table from the appropriate decompressed ROMFS file."""
+        romfs_path = self._TABLE_PATHS.get(name, self._PERSON_PATH)
+        raw = self._get_lz_data(romfs_path)
+        lz_buf = BinaryBuffer.__new__(BinaryBuffer)
+        lz_buf._path = Path(romfs_path.split("/")[-1])
+        lz_buf._shadow = bytearray(raw)
         old_buf = self._buf
-        self._buf = person_buf
+        self._buf = lz_buf
         try:
             return super().parse_table(name)
         finally:
@@ -103,7 +125,7 @@ class FE13Driver(FormatDriver):
         :param name: Table name (must be ``"characters"``).
         :param rows: Row objects previously returned by :meth:`parse_table`.
         """
-        person_data = bytearray(self._get_person_data())
+        person_data = bytearray(self._get_lz_data(self._PERSON_PATH))
         person_buf = BinaryBuffer.__new__(BinaryBuffer)
         person_buf._path = Path("Person.bin")
         person_buf._shadow = person_data
@@ -116,7 +138,7 @@ class FE13Driver(FormatDriver):
         new_compressed = compress_lz11(bytes(person_data))
         new_romfs = self._rebuild_romfs({self._PERSON_PATH: new_compressed})
         self._buf._shadow = bytearray(new_romfs)
-        self._person_data = bytes(person_data)
+        self._lz_cache[self._PERSON_PATH] = bytes(person_data)
 
     def _rebuild_romfs(self, modified: dict[str, bytes | None]) -> bytes:
         """Extract all files from the current ROMFS, merge modifications, rebuild.

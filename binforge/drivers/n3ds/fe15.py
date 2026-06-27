@@ -19,6 +19,11 @@ class FE15Driver(FE13Driver):
 
     _PERSON_PATH = _ECHOES_PATH
 
+    _TABLE_PATHS: dict[str, str] = {
+        "characters": _ECHOES_PATH,
+        "classes": "GameData/JobData.bin.lz",
+    }
+
     _FE15_PERSON_SIZE = 72 * 50  # 3600 bytes — unique to Echoes
 
     def detect(self, buf: BinaryBuffer) -> bool:
@@ -47,6 +52,15 @@ class FE15Driver(FE13Driver):
                     Field("lck", u8, 0x08),
                     Field("def_", u8, 0x09),
                     Field("res", u8, 0x0A),
+                ],
+            ),
+            "classes": TableDef(
+                offset=0x00000000,
+                row_size=80,
+                count=36,
+                fields=[
+                    Field("id", u8, 0x00),
+                    Field("move", u8, 0x08),
                 ],
             ),
         }

@@ -108,3 +108,41 @@ def test_fe4_parse_classes_returns_64_rows() -> None:
     assert rows[0].id == 3
     assert rows[0].move == 6
     assert rows[0].con == 10
+
+
+def _make_fe13_buf_with_jobs() -> BinaryBuffer:
+    """Build a minimal FE13 ROMFS with both Person.bin.lz and JobData.bin.lz."""
+    from binforge.core.compression import compress_lz11
+    from binforge.drivers.n3ds.romfs_builder import RomFSBuilder
+
+    person_raw = bytearray(108 * 85)  # FE13 person size
+    job_raw = bytearray(96 * 66)      # FE13 class size
+    job_raw[0x00] = 7   # id
+    job_raw[0x08] = 5   # move
+
+    files = {
+        "GameData/Person.bin.lz": compress_lz11(bytes(person_raw)),
+        "GameData/JobData.bin.lz": compress_lz11(bytes(job_raw)),
+    }
+    blob = RomFSBuilder().build(files)
+    buf = BinaryBuffer.__new__(BinaryBuffer)
+    buf._path = Path("fe13_jobs.romfs")
+    buf._shadow = bytearray(blob)
+    return buf
+
+
+def test_fe13_has_classes_table() -> None:
+    from binforge.drivers.n3ds.fe13 import FE13Driver
+    buf = _make_fe13_buf_with_jobs()
+    drv = FE13Driver(buf)
+    assert "classes" in drv.table_names()
+
+
+def test_fe13_parse_classes() -> None:
+    from binforge.drivers.n3ds.fe13 import FE13Driver
+    buf = _make_fe13_buf_with_jobs()
+    drv = FE13Driver(buf)
+    rows = drv.parse_table("classes")
+    assert len(rows) == 66
+    assert rows[0].id == 7
+    assert rows[0].move == 5

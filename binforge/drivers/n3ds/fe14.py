@@ -19,6 +19,11 @@ class FE14Driver(FE13Driver):
 
     _PERSON_PATH = _FATES_PATH
 
+    _TABLE_PATHS: dict[str, str] = {
+        "characters": _FATES_PATH,
+        "classes": "GameData/JobData.bin.lz",
+    }
+
     _FE14_PERSON_SIZE = 84 * 130  # 10920 bytes — unique to Fates
 
     def detect(self, buf: BinaryBuffer) -> bool:
@@ -47,6 +52,15 @@ class FE14Driver(FE13Driver):
                     Field("lck", u8, 0x09),
                     Field("def_", u8, 0x0A),
                     Field("res", u8, 0x0B),
+                ],
+            ),
+            "classes": TableDef(
+                offset=0x00000000,
+                row_size=104,
+                count=109,
+                fields=[
+                    Field("id", u8, 0x00),
+                    Field("move", u8, 0x08),
                 ],
             ),
         }
