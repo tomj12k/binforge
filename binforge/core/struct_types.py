@@ -10,10 +10,10 @@ class FieldType:
     is_str: bool = False
 
 
-u8  = FieldType("B", 1)
+u8 = FieldType("B", 1)
 u16 = FieldType("H", 2)
 u32 = FieldType("I", 4)
-i8  = FieldType("b", 1)
+i8 = FieldType("b", 1)
 i16 = FieldType("h", 2)
 i32 = FieldType("i", 4)
 ptr = FieldType("I", 4, is_ptr=True)

@@ -7,7 +7,7 @@ from binforge.drivers.snes.fe5 import FE5Driver
 
 def _fake_snes(title: bytes) -> BinaryBuffer:
     data = bytearray(0x8000)
-    data[0x7FC0:0x7FC0 + 18] = title
+    data[0x7FC0 : 0x7FC0 + 18] = title
     p = Path(tempfile.mktemp(suffix=".sfc"))
     p.write_bytes(bytes(data))
     buf = BinaryBuffer(p)

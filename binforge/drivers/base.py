@@ -6,7 +6,7 @@ from typing import Any
 
 from binforge.core.engine import BinaryBuffer
 from binforge.core.pointer import PointerTable
-from binforge.core.struct_types import Field, FieldType, Struct, TableDef
+from binforge.core.struct_types import FieldType, Struct, TableDef
 from binforge.errors import TableNotFoundError
 
 
@@ -62,12 +62,24 @@ class FormatDriver(ABC):
     def _read_field(self, offset: int, ft: FieldType) -> Any:
         big = self.ENDIAN == "big"
         if ft.is_str:
-            return self._buf.read_bytes(offset, ft.size).rstrip(b"\x00").decode("ascii", errors="replace")
+            return (
+                self._buf.read_bytes(offset, ft.size)
+                .rstrip(b"\x00")
+                .decode("ascii", errors="replace")
+            )
         if ft.size == 1:
             return self._buf.read_i8(offset) if ft.fmt == "b" else self._buf.read_u8(offset)
         if ft.size == 2:
-            return self._buf.read_i16(offset, big=big) if ft.fmt == "h" else self._buf.read_u16(offset, big=big)
-        return self._buf.read_i32(offset, big=big) if ft.fmt == "i" else self._buf.read_u32(offset, big=big)
+            return (
+                self._buf.read_i16(offset, big=big)
+                if ft.fmt == "h"
+                else self._buf.read_u16(offset, big=big)
+            )
+        return (
+            self._buf.read_i32(offset, big=big)
+            if ft.fmt == "i"
+            else self._buf.read_u32(offset, big=big)
+        )
 
     def _write_field(self, offset: int, ft: FieldType, value: Any, ec: str) -> None:
         if ft.is_str:

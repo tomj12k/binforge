@@ -17,7 +17,7 @@ def test_len():
 
 
 def test_read_u8():
-    b = _buf(b"\x0A\x0B\x0C")
+    b = _buf(b"\x0a\x0b\x0c")
     assert b.read_u8(0) == 0x0A
     assert b.read_u8(2) == 0x0C
 
@@ -49,33 +49,33 @@ def test_read_i8_negative():
 
 
 def test_read_bytes():
-    b = _buf(b"\xDE\xAD\xBE\xEF")
-    assert b.read_bytes(1, 2) == b"\xAD\xBE"
+    b = _buf(b"\xde\xad\xbe\xef")
+    assert b.read_bytes(1, 2) == b"\xad\xbe"
 
 
 def test_patch_success():
     b = _buf(b"\x00\x00\x00\x00")
-    b.patch(1, b"\xFF\xEE")
-    assert bytes(b._shadow) == b"\x00\xFF\xEE\x00"
+    b.patch(1, b"\xff\xee")
+    assert bytes(b._shadow) == b"\x00\xff\xee\x00"
 
 
 def test_patch_at_end():
     b = _buf(b"\x00\x00")
-    b.patch(1, b"\xFF")
-    assert bytes(b._shadow) == b"\x00\xFF"
+    b.patch(1, b"\xff")
+    assert bytes(b._shadow) == b"\x00\xff"
 
 
 def test_patch_size_error_overflow():
     b = _buf(b"\x00\x00")
     with pytest.raises(PatchSizeError):
-        b.patch(1, b"\xFF\xFF")  # offset 1 + 2 bytes = 3 > file size 2
+        b.patch(1, b"\xff\xff")  # offset 1 + 2 bytes = 3 > file size 2
 
 
 def test_patch_does_not_touch_disk(tmp_path):
     p = tmp_path / "src.bin"
     p.write_bytes(b"\x01\x02\x03")
     buf = BinaryBuffer(p)
-    buf.patch(0, b"\xFF")
+    buf.patch(0, b"\xff")
     assert p.read_bytes() == b"\x01\x02\x03"  # original untouched
 
 
@@ -84,9 +84,9 @@ def test_commit_to_new_path(tmp_path):
     dst = tmp_path / "dst.bin"
     src.write_bytes(b"\x01\x02\x03")
     buf = BinaryBuffer(src)
-    buf.patch(0, b"\xFF")
+    buf.patch(0, b"\xff")
     buf.commit(dst)
-    assert dst.read_bytes() == b"\xFF\x02\x03"
+    assert dst.read_bytes() == b"\xff\x02\x03"
     assert src.read_bytes() == b"\x01\x02\x03"
 
 
@@ -94,9 +94,9 @@ def test_commit_in_place(tmp_path):
     p = tmp_path / "file.bin"
     p.write_bytes(b"\x00\x00")
     buf = BinaryBuffer(p)
-    buf.patch(0, b"\xAB")
+    buf.patch(0, b"\xab")
     buf.commit(in_place=True)
-    assert p.read_bytes() == b"\xAB\x00"
+    assert p.read_bytes() == b"\xab\x00"
 
 
 def test_commit_requires_path_or_in_place(tmp_path):

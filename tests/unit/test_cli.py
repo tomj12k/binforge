@@ -1,12 +1,11 @@
 """Tests for binforge.cli.main."""
+
 from __future__ import annotations
 
 import json
-import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 from click.testing import CliRunner
 
 from binforge.cli.main import cli
@@ -17,6 +16,7 @@ from binforge.errors import DriverNotFoundError, TableNotFoundError
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_driver(table_data: list[Struct] | None = None) -> MagicMock:
     """Return a mock FormatDriver with sensible defaults."""
@@ -37,6 +37,7 @@ def _make_driver(table_data: list[Struct] | None = None) -> MagicMock:
 # detect
 # ---------------------------------------------------------------------------
 
+
 def test_detect_success(tmp_path: Path) -> None:
     f = tmp_path / "game.bin"
     f.write_bytes(b"\x00" * 16)
@@ -53,7 +54,7 @@ def test_detect_success(tmp_path: Path) -> None:
 
 def test_detect_no_driver(tmp_path: Path) -> None:
     f = tmp_path / "unknown.bin"
-    f.write_bytes(b"\xFF" * 16)
+    f.write_bytes(b"\xff" * 16)
     runner = CliRunner()
     with patch("binforge.open", side_effect=DriverNotFoundError(str(f))):
         result = runner.invoke(cli, ["detect", str(f)])
@@ -64,6 +65,7 @@ def test_detect_no_driver(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # dump
 # ---------------------------------------------------------------------------
+
 
 def test_dump_json_stdout(tmp_path: Path) -> None:
     f = tmp_path / "game.bin"
@@ -132,6 +134,7 @@ def test_dump_table_not_found(tmp_path: Path) -> None:
 # patch
 # ---------------------------------------------------------------------------
 
+
 def test_patch_inline(tmp_path: Path) -> None:
     f = tmp_path / "game.bin"
     f.write_bytes(b"\x00" * 16)
@@ -141,7 +144,19 @@ def test_patch_inline(tmp_path: Path) -> None:
     with patch("binforge.open", return_value=drv):
         result = runner.invoke(
             cli,
-            ["patch", str(f), "chars", "--row", "0", "--field", "hp", "--value", "30", "--out", str(out)],
+            [
+                "patch",
+                str(f),
+                "chars",
+                "--row",
+                "0",
+                "--field",
+                "hp",
+                "--value",
+                "30",
+                "--out",
+                str(out),
+            ],
         )
     assert result.exit_code == 0
     assert "Written to" in result.output
@@ -186,7 +201,19 @@ def test_patch_bad_row_index(tmp_path: Path) -> None:
     with patch("binforge.open", return_value=drv):
         result = runner.invoke(
             cli,
-            ["patch", str(f), "chars", "--row", "999", "--field", "hp", "--value", "1", "--out", str(out)],
+            [
+                "patch",
+                str(f),
+                "chars",
+                "--row",
+                "999",
+                "--field",
+                "hp",
+                "--value",
+                "1",
+                "--out",
+                str(out),
+            ],
         )
     assert result.exit_code == 1
     assert "Error" in result.output
@@ -195,6 +222,7 @@ def test_patch_bad_row_index(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # repack
 # ---------------------------------------------------------------------------
+
 
 def test_repack_delegates_to_patch(tmp_path: Path) -> None:
     f = tmp_path / "game.bin"

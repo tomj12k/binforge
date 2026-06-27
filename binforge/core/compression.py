@@ -87,7 +87,7 @@ def decompress_lz11(data: bytes) -> bytes:
                     disp = ((data[pos + 1] & 0xF) << 8) | data[pos + 2]
                     pos += 3
                 elif indicator == 1:
-                    b1_hi = (data[pos + 1] << 4)
+                    b1_hi = data[pos + 1] << 4
                     b2_hi = (data[pos + 2] >> 4) & 0xF
                     length = ((b0 & 0xF) << 12) | b1_hi | b2_hi
                     length += 273

@@ -1,7 +1,11 @@
 import pytest
 from binforge.core.compression import (
-    compress_lz10, compress_lz11, compress_rle,
-    decompress_lz10, decompress_lz11, decompress_rle,
+    compress_lz10,
+    compress_lz11,
+    compress_rle,
+    decompress_lz10,
+    decompress_lz11,
+    decompress_rle,
 )
 from binforge.errors import DecompressionError
 
@@ -31,7 +35,7 @@ def test_lz11_bad_magic():
 
 
 def test_rle_round_trip():
-    original = b"\xAA\xAA\xAA\xBB\xCC"
+    original = b"\xaa\xaa\xaa\xbb\xcc"
     compressed = compress_rle(original)
     assert decompress_rle(compressed) == original
 

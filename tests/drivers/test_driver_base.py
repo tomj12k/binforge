@@ -3,14 +3,15 @@ import pytest
 from pathlib import Path
 
 from binforge.core.engine import BinaryBuffer
-from binforge.core.struct_types import Field, TableDef, u8, u16, u32, ptr
+from binforge.core.struct_types import Field, TableDef, u8, u16
 from binforge.drivers.base import FormatDriver
 from binforge.errors import TableNotFoundError
 
 
 class _TestDriver(FormatDriver):
     """Minimal driver with pointer base 0 so offsets == file offsets."""
-    MAGIC = b"\xFE\xFE"
+
+    MAGIC = b"\xfe\xfe"
     ENDIAN = "little"
     POINTER_BASE = 0x00000000
 
@@ -24,12 +25,12 @@ class _TestDriver(FormatDriver):
                 row_size=8,
                 count=2,
                 fields=[
-                    Field("hp",  u8,  0x00),
-                    Field("str", u8,  0x01),
-                    Field("spd", u8,  0x02),
-                    Field("lck", u8,  0x03),
+                    Field("hp", u8, 0x00),
+                    Field("str", u8, 0x01),
+                    Field("spd", u8, 0x02),
+                    Field("lck", u8, 0x03),
                     Field("exp", u16, 0x04),
-                    Field("id",  u16, 0x06),
+                    Field("id", u16, 0x06),
                 ],
             )
         }
@@ -37,7 +38,8 @@ class _TestDriver(FormatDriver):
 
 def _make_driver(rows: list[tuple[int, ...]]) -> tuple[_TestDriver, Path]:
     """Build a synthetic file with `rows` of (hp, str, spd, lck, exp, id)."""
-    import tempfile, os
+    import tempfile
+
     data = bytearray()
     for hp, s, spd, lck, exp, uid in rows:
         data += struct.pack("<BBBBHH", hp, s, spd, lck, exp, uid)

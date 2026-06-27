@@ -1,4 +1,5 @@
 """Minimal Nintendo ROMFS (Level 3) extractor."""
+
 import struct
 from binforge.errors import DecompressionError
 
@@ -16,13 +17,13 @@ class RomFS:
         # Level 3 starts after IVFC header (0x60 bytes) + master hash table
         master_hash_size = struct.unpack_from("<I", data, 0x08)[0]
         self._l3_offset = 0x60 + master_hash_size
-        self._l3 = data[self._l3_offset:]
+        self._l3 = data[self._l3_offset :]
         # Level 3 header
-        self._dir_hash_off  = struct.unpack_from("<I", self._l3, 0x04)[0]
-        self._dir_meta_off  = struct.unpack_from("<I", self._l3, 0x0C)[0]
+        self._dir_hash_off = struct.unpack_from("<I", self._l3, 0x04)[0]
+        self._dir_meta_off = struct.unpack_from("<I", self._l3, 0x0C)[0]
         self._file_hash_off = struct.unpack_from("<I", self._l3, 0x14)[0]
         self._file_meta_off = struct.unpack_from("<I", self._l3, 0x1C)[0]
-        self._data_off      = struct.unpack_from("<I", self._l3, 0x24)[0]
+        self._data_off = struct.unpack_from("<I", self._l3, 0x24)[0]
 
     def read_file(self, virtual_path: str) -> bytes:
         """Return the raw bytes of a file inside the ROMFS by its virtual path."""

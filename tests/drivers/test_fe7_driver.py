@@ -3,6 +3,7 @@ These tests use a synthetic fixture (not a real ROM).
 The fixture's table is placed at file offset 0, so we use a subclassed
 driver with POINTER_BASE=0 and offset=0 to avoid needing a full ROM.
 """
+
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,7 @@ from binforge.drivers.gba.fe7 import FE7Driver
 
 class _FixtureDriver(FE7Driver):
     """Override table offset to 0x00000000 so file offset == ROM offset."""
+
     POINTER_BASE = 0x00000000
 
     def tables(self) -> dict[str, TableDef]:
@@ -39,9 +41,9 @@ def drv() -> _FixtureDriver:
 
 def test_parse_character_hp(drv: _FixtureDriver) -> None:
     rows = drv.parse_table("characters")
-    assert rows[0].hp == 20   # Lyn
-    assert rows[1].hp == 16   # Eliwood
-    assert rows[2].hp == 23   # Hector
+    assert rows[0].hp == 20  # Lyn
+    assert rows[1].hp == 16  # Eliwood
+    assert rows[2].hp == 23  # Hector
 
 
 def test_parse_character_name_ptr(drv: _FixtureDriver) -> None:

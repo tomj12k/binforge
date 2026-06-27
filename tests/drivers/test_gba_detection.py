@@ -1,4 +1,3 @@
-import struct
 import tempfile
 from pathlib import Path
 
@@ -10,7 +9,7 @@ from binforge.drivers.gba.fe8 import FE8Driver
 
 def _fake_rom(game_code: bytes) -> BinaryBuffer:
     data = bytearray(0x200)
-    data[0xAC:0xAC + 4] = game_code
+    data[0xAC : 0xAC + 4] = game_code
     p = Path(tempfile.mktemp(suffix=".gba"))
     p.write_bytes(bytes(data))
     buf = BinaryBuffer(p)

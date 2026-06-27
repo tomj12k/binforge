@@ -28,9 +28,7 @@ class PointerRangeError(BinforgeError):
     """Raised when a pointer resolves outside file bounds."""
 
     def __init__(self, addr: int, file_size: int) -> None:
-        super().__init__(
-            f"Pointer 0x{addr:08X} resolves outside file bounds ({file_size} bytes)"
-        )
+        super().__init__(f"Pointer 0x{addr:08X} resolves outside file bounds ({file_size} bytes)")
 
 
 class DecompressionError(BinforgeError):

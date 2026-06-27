@@ -1,6 +1,10 @@
 from binforge.core.struct_types import (
-    Field, FieldType, Struct, TableDef,
-    fixed_str, i8, i16, i32, ptr, u8, u16, u32,
+    Field,
+    Struct,
+    TableDef,
+    fixed_str,
+    ptr,
+    u8,
 )
 
 

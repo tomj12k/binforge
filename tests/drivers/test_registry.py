@@ -9,9 +9,11 @@ def test_register_adds_to_registry():
 
     @register
     class _Dummy(FormatDriver):
-        MAGIC = b"\xDD\xDD"
+        MAGIC = b"\xdd\xdd"
+
         def detect(self, buf: BinaryBuffer) -> bool:
             return False
+
         def tables(self) -> dict[str, TableDef]:
             return {}
 

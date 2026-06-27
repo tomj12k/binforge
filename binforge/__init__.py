@@ -1,11 +1,17 @@
+from __future__ import annotations
+
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from binforge.core.engine import BinaryBuffer
 from binforge.errors import DriverNotFoundError
 from binforge.registry import _registry, register  # noqa: F401
 
+if TYPE_CHECKING:
+    from binforge.drivers.base import FormatDriver
 
-def open(path: str | Path) -> object:  # returns FormatDriver
+
+def open(path: str | Path) -> FormatDriver:
     from binforge.drivers.base import FormatDriver  # avoid circular at module level
 
     # Importing drivers triggers @register side-effects
