@@ -60,3 +60,11 @@ class RomFSBuildError(BinforgeError):
         super().__init__(f"ROMFS build error at '{path}': {reason}")
         self.path = path
         self.reason = reason
+
+
+class EncodingError(BinforgeError):
+    """Raised when a character cannot be encoded in the game's codec table."""
+
+    def __init__(self, glyph: str) -> None:
+        super().__init__(f"Cannot encode character {glyph!r} — not in codec table")
+        self.glyph = glyph
