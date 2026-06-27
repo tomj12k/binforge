@@ -1,5 +1,6 @@
 from binforge.core.engine import BinaryBuffer
 from binforge.core.struct_types import Field, TableDef, str_ptr, u8
+
 from binforge.drivers.base import FormatDriver
 from binforge.drivers.gba.codec_fe8 import FE8_CODEC
 from binforge.registry import register
@@ -64,6 +65,26 @@ class FE8Driver(FormatDriver):
                     Field("might", u8, 0x05),
                     Field("hit", u8, 0x06),
                     Field("crit", u8, 0x07),
+                ],
+            ),
+            "skills": TableDef(  # unverified
+                offset=0x0804F830,
+                row_size=8,
+                count=64,
+                fields=[
+                    Field("id", u8, 0x00),
+                    Field("effect", u8, 0x01),
+                    Field("type", u8, 0x02),
+                ],
+            ),
+            "chapters": TableDef(  # unverified
+                offset=0x08069450,
+                row_size=60,
+                count=46,
+                fields=[
+                    Field("id", u8, 0x00),
+                    Field("map_id", u8, 0x01),
+                    Field("music", u8, 0x02),
                 ],
             ),
         }

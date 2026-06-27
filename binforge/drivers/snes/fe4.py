@@ -36,4 +36,14 @@ class FE4Driver(FormatDriver):
                     Field("mov", u8, 0x0A),
                 ],
             ),
+            "classes": TableDef(  # unverified
+                offset=0x025E80,
+                row_size=24,
+                count=64,
+                fields=[
+                    Field("id", u8, 0x00),
+                    Field("move", u8, 0x01),
+                    Field("con", u8, 0x02),
+                ],
+            ),
         }

@@ -80,4 +80,24 @@ class FE7Driver(FormatDriver):
                     Field("exp", u8, 0x01),
                 ],
             ),
+            "skills": TableDef(  # unverified
+                offset=0x0803F784,
+                row_size=8,
+                count=64,
+                fields=[
+                    Field("id", u8, 0x00),
+                    Field("effect", u8, 0x01),
+                    Field("type", u8, 0x02),
+                ],
+            ),
+            "chapters": TableDef(  # unverified
+                offset=0x08068B30,
+                row_size=60,
+                count=47,
+                fields=[
+                    Field("id", u8, 0x00),
+                    Field("map_id", u8, 0x01),
+                    Field("music", u8, 0x02),
+                ],
+            ),
         }

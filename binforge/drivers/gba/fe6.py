@@ -1,5 +1,5 @@
 from binforge.core.engine import BinaryBuffer
-from binforge.core.struct_types import Field, TableDef, str_ptr, u8
+from binforge.core.struct_types import Field, TableDef, ptr, str_ptr, u8
 from binforge.drivers.base import FormatDriver
 from binforge.drivers.gba.codec_fe6 import FE6_CODEC
 from binforge.registry import register
@@ -52,6 +52,20 @@ class FE6Driver(FormatDriver):
                     Field("def_", u8, 0x08),
                     Field("res", u8, 0x09),
                     Field("mov", u8, 0x0A),
+                ],
+            ),
+            "items": TableDef(  # unverified
+                offset=0x08040A28,
+                row_size=36,
+                count=213,
+                fields=[
+                    Field("name_ptr", ptr, 0x00),
+                    Field("type", u8, 0x04),
+                    Field("uses", u8, 0x05),
+                    Field("mt", u8, 0x06),
+                    Field("hit", u8, 0x07),
+                    Field("weight", u8, 0x08),
+                    Field("rank", u8, 0x09),
                 ],
             ),
         }
