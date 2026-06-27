@@ -174,3 +174,45 @@ def test_pack_table_raw_pointer_bypass() -> None:
     # pointer field in ROM should still be 0x08000200
     raw_ptr = _struct.unpack_from("<I", buf._shadow, 0x100)[0]
     assert raw_ptr == 0x08000200
+
+
+def test_str_ptr_raw_preserved_without_text_codec() -> None:
+    """Test that _pending_raw is populated for str_ptr fields even when TEXT_CODEC is None."""
+    rom = bytearray(0x400)
+    # Write pointer to 0x08000200 at table row 0 field 0
+    _struct.pack_into("<I", rom, 0x100, 0x08000200)
+    # Write hp at offset 0x04
+    rom[0x104] = 25
+
+    @register
+    class _StrPtrNoCodecDriver(FormatDriver):
+        MAGIC = b""
+        ENDIAN = "little"
+        POINTER_BASE = _GBA_BASE
+        TEXT_CODEC = None  # No text codec
+
+        def detect(self, buf: BinaryBuffer) -> bool:
+            return True
+
+        def tables(self) -> dict[str, TableDef]:
+            return {
+                "chars": TableDef(
+                    offset=_GBA_BASE + 0x100,
+                    row_size=8,
+                    count=1,
+                    fields=[
+                        Field("name_ptr", str_ptr, 0x00),
+                        Field("hp", u8, 0x04),
+                    ],
+                )
+            }
+
+    buf = BinaryBuffer.__new__(BinaryBuffer)
+    buf._path = Path("test.gba")
+    buf._shadow = bytearray(rom)
+    drv = _StrPtrNoCodecDriver(buf)
+    rows = drv.parse_table("chars")
+    # When TEXT_CODEC is None, the field value is the raw pointer
+    assert rows[0].name_ptr == 0x08000200
+    # _pending_raw should be populated with the raw pointer value
+    assert rows[0]._raw.get("name_ptr") == 0x08000200

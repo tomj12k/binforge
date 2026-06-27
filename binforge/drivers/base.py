@@ -75,8 +75,8 @@ class FormatDriver(ABC):
         big = self.ENDIAN == "big"
         if ft.is_str_ptr:
             raw_ptr = self._buf.read_u32(offset, big=big)
+            self._pending_raw[field_name] = raw_ptr
             if self.TEXT_CODEC is not None:
-                self._pending_raw[field_name] = raw_ptr
                 file_off = self._ptr.resolve(raw_ptr)
                 raw_bytes = bytearray()
                 pos = file_off

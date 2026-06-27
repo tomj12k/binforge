@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 
 def open(path: str | Path) -> FormatDriver:
-    from binforge.drivers.base import FormatDriver  # avoid circular at module level
+    from binforge.drivers.base import FormatDriver  # noqa: F401  # used in line 53
 
     # Importing drivers triggers @register side-effects
     try:
