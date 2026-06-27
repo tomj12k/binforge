@@ -3,7 +3,7 @@
 import struct
 from binforge.errors import DecompressionError
 
-_ROMFS_MAGIC = 0x49564643  # "IVFC"
+_ROMFS_MAGIC = 0x43465649  # b"IVFC" read as little-endian u32
 
 
 class RomFS:
