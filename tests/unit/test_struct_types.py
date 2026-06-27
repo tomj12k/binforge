@@ -2,8 +2,10 @@ from binforge.core.struct_types import (
     Field,
     Struct,
     TableDef,
+    FieldType,
     fixed_str,
     ptr,
+    str_ptr,
     u8,
 )
 
@@ -69,3 +71,21 @@ def test_struct_repr_ptr_hex():
     s = Struct(["name_ptr"], name_ptr=0x0847A820)
     r = repr(s)
     assert "0x0847A820" in r
+
+
+def test_str_ptr_is_str_ptr() -> None:
+    assert str_ptr.is_str_ptr is True
+
+
+def test_str_ptr_is_ptr() -> None:
+    assert str_ptr.is_ptr is True
+
+
+def test_str_ptr_size() -> None:
+    assert str_ptr.size == 4
+
+
+def test_struct_has_raw_dict() -> None:
+    s = Struct(["name"], name="Lyn")
+    assert hasattr(s, "_raw")
+    assert isinstance(s._raw, dict)

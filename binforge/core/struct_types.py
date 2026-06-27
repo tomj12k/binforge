@@ -8,6 +8,7 @@ class FieldType:
     size: int
     is_ptr: bool = False
     is_str: bool = False
+    is_str_ptr: bool = False
 
 
 u8 = FieldType("B", 1)
@@ -17,6 +18,7 @@ i8 = FieldType("b", 1)
 i16 = FieldType("h", 2)
 i32 = FieldType("i", 4)
 ptr = FieldType("I", 4, is_ptr=True)
+str_ptr = FieldType("I", 4, is_ptr=True, is_str_ptr=True)
 
 
 def fixed_str(n: int) -> FieldType:
@@ -41,6 +43,7 @@ class TableDef:
 class Struct:
     def __init__(self, field_names: list[str], **kwargs: Any) -> None:
         self._fields = field_names
+        self._raw: dict[str, int] = {}
         for k, v in kwargs.items():
             setattr(self, k, v)
 
