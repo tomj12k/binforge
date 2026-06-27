@@ -7,6 +7,7 @@ from typing import Any
 from binforge.core.engine import BinaryBuffer
 from binforge.core.pointer import PointerTable
 from binforge.core.struct_types import FieldType, Struct, TableDef
+from binforge.core.text import TextCodec
 from binforge.errors import PatchSizeError, TableNotFoundError
 
 
@@ -14,10 +15,12 @@ class FormatDriver(ABC):
     MAGIC: bytes = b""
     ENDIAN: str = "little"
     POINTER_BASE: int = 0x00000000
+    TEXT_CODEC: TextCodec | None = None
 
     def __init__(self, buf: BinaryBuffer) -> None:
         self._buf = buf
         self._ptr = PointerTable(self.POINTER_BASE, self.ENDIAN)
+        self._pending_raw: dict[str, int] = {}
 
     @abstractmethod
     def tables(self) -> dict[str, TableDef]: ...
@@ -36,10 +39,13 @@ class FormatDriver(ABC):
         rows: list[Struct] = []
         for i in range(tdef.count):
             row_start = file_offset + i * tdef.row_size
+            self._pending_raw = {}
             kwargs: dict[str, Any] = {}
             for f in tdef.fields:
-                kwargs[f.name] = self._read_field(row_start + f.offset, f.ftype)
-            rows.append(Struct(list(kwargs.keys()), **kwargs))
+                kwargs[f.name] = self._read_field(row_start + f.offset, f.ftype, f.name)
+            row = Struct(list(kwargs.keys()), **kwargs)
+            row._raw = dict(self._pending_raw)
+            rows.append(row)
         return rows
 
     def pack_table(self, name: str, rows: list[Struct]) -> None:
@@ -65,8 +71,23 @@ class FormatDriver(ABC):
 
     # ── private helpers ──────────────────────────────────────────────────────
 
-    def _read_field(self, offset: int, ft: FieldType) -> Any:
+    def _read_field(self, offset: int, ft: FieldType, field_name: str = "") -> Any:
         big = self.ENDIAN == "big"
+        if ft.is_str_ptr:
+            raw_ptr = self._buf.read_u32(offset, big=big)
+            if self.TEXT_CODEC is not None:
+                self._pending_raw[field_name] = raw_ptr
+                file_off = self._ptr.resolve(raw_ptr)
+                raw_bytes = bytearray()
+                pos = file_off
+                while pos < len(self._buf._shadow):
+                    b = self._buf.read_u8(pos)
+                    if b == 0x00:
+                        break
+                    raw_bytes.append(b)
+                    pos += 1
+                return self.TEXT_CODEC.decode_bytes(bytes(raw_bytes))
+            return raw_ptr
         if ft.is_str:
             return (
                 self._buf.read_bytes(offset, ft.size)
@@ -88,6 +109,26 @@ class FormatDriver(ABC):
         )
 
     def _write_field(self, offset: int, ft: FieldType, value: Any, ec: str) -> None:
+        if ft.is_str_ptr:
+            if isinstance(value, str) and self.TEXT_CODEC is not None:
+                encoded = self.TEXT_CODEC.encode(value)
+                big = self.ENDIAN == "big"
+                raw_ptr = self._buf.read_u32(offset, big=big)
+                file_off = self._ptr.resolve(raw_ptr)
+                existing_len = 0
+                while file_off + existing_len < len(self._buf._shadow):
+                    if self._buf.read_u8(file_off + existing_len) == 0x00:
+                        existing_len += 1
+                        break
+                    existing_len += 1
+                if len(encoded) != existing_len:
+                    raise PatchSizeError(file_off, len(encoded), existing_len)
+                self._buf.patch(file_off, encoded)
+            elif isinstance(value, int):
+                big = self.ENDIAN == "big"
+                packed = _struct.pack(f"{'>' if big else '<'}I", value)
+                self._buf.patch(offset, packed)
+            return
         if ft.is_str:
             encoded = value.encode("ascii")[: ft.size].ljust(ft.size, b"\x00")
             self._buf.patch(offset, encoded)

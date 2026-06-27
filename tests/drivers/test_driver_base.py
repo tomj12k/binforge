@@ -1,11 +1,14 @@
 import struct
+import struct as _struct
 import pytest
 from pathlib import Path
 
 from binforge.core.engine import BinaryBuffer
-from binforge.core.struct_types import Field, TableDef, u8, u16
+from binforge.core.struct_types import Field, TableDef, u8, u16, str_ptr
+from binforge.core.text import TextCodec
 from binforge.drivers.base import FormatDriver
 from binforge.errors import TableNotFoundError
+from binforge.registry import register
 
 
 class _TestDriver(FormatDriver):
@@ -85,3 +88,89 @@ def test_table_names():
     drv, p = _make_driver([(1, 2, 3, 4, 5, 6)])
     assert drv.table_names() == ["units"]
     p.unlink()
+
+
+# ── str_ptr tests ────────────────────────────────────────────────────────────
+
+_SIMPLE_TABLE: dict[int, str] = {0x01: "L", 0x02: "y", 0x03: "n"}
+_SIMPLE_CODEC = TextCodec(_SIMPLE_TABLE)
+_GBA_BASE = 0x08000000
+
+
+def _make_str_ptr_driver_buf() -> tuple[BinaryBuffer, type[FormatDriver]]:
+    """Build a synthetic ROM with a name pointer and encoded string."""
+    rom = bytearray(0x400)
+    # Write "Lyn\x00" encoded at file offset 0x200 (ROM addr 0x08000200)
+    rom[0x200] = 0x01  # L
+    rom[0x201] = 0x02  # y
+    rom[0x202] = 0x03  # n
+    rom[0x203] = 0x00  # null terminator
+    # Write pointer to 0x08000200 at table row 0 field 0
+    _struct.pack_into("<I", rom, 0x100, 0x08000200)
+    # Write hp at offset 0x04
+    rom[0x104] = 25
+
+    @register
+    class _StrPtrDriver(FormatDriver):
+        MAGIC = b""
+        ENDIAN = "little"
+        POINTER_BASE = _GBA_BASE
+        TEXT_CODEC = _SIMPLE_CODEC
+
+        def detect(self, buf: BinaryBuffer) -> bool:
+            return True
+
+        def tables(self) -> dict[str, TableDef]:
+            return {
+                "chars": TableDef(
+                    offset=_GBA_BASE + 0x100,
+                    row_size=8,
+                    count=1,
+                    fields=[
+                        Field("name_ptr", str_ptr, 0x00),
+                        Field("hp", u8, 0x04),
+                    ],
+                )
+            }
+
+    buf = BinaryBuffer.__new__(BinaryBuffer)
+    buf._path = Path("test.gba")
+    buf._shadow = bytearray(rom)
+    return buf, _StrPtrDriver
+
+
+def test_str_ptr_resolves_to_string() -> None:
+    buf, Drv = _make_str_ptr_driver_buf()
+    drv = Drv(buf)
+    rows = drv.parse_table("chars")
+    assert rows[0].name_ptr == "Lyn"
+    assert rows[0].hp == 25
+
+
+def test_str_ptr_raw_preserved() -> None:
+    buf, Drv = _make_str_ptr_driver_buf()
+    drv = Drv(buf)
+    rows = drv.parse_table("chars")
+    assert rows[0]._raw.get("name_ptr") == 0x08000200
+
+
+def test_pack_table_reencodes_string_same_length() -> None:
+    buf, Drv = _make_str_ptr_driver_buf()
+    drv = Drv(buf)
+    rows = drv.parse_table("chars")
+    rows[0].name_ptr = "nLy"  # same length (3 chars + null = 4 bytes)
+    drv.pack_table("chars", rows)
+    drv2 = Drv(buf)
+    rows2 = drv2.parse_table("chars")
+    assert rows2[0].name_ptr == "nLy"
+
+
+def test_pack_table_raw_pointer_bypass() -> None:
+    buf, Drv = _make_str_ptr_driver_buf()
+    drv = Drv(buf)
+    rows = drv.parse_table("chars")
+    rows[0].name_ptr = 0x08000200  # set as int — bypass codec
+    drv.pack_table("chars", rows)
+    # pointer field in ROM should still be 0x08000200
+    raw_ptr = _struct.unpack_from("<I", buf._shadow, 0x100)[0]
+    assert raw_ptr == 0x08000200
