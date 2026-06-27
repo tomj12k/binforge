@@ -8,6 +8,7 @@ from binforge.core.engine import BinaryBuffer
 from binforge.core.struct_types import Field, TableDef, u8, u32
 from binforge.drivers.base import FormatDriver
 from binforge.drivers.n3ds.romfs import RomFS
+from binforge.drivers.n3ds.romfs_builder import RomFSBuilder
 from binforge.errors import DecompressionError
 from binforge.registry import register
 
@@ -93,13 +94,14 @@ class FE13Driver(FormatDriver):
             self._buf = old_buf
 
     def pack_table(self, name: str, rows: list) -> None:  # type: ignore[override]
-        """Pack edits into the decompressed Person.bin buffer.
+        """Pack edits and rebuild the ROMFS container.
 
-        .. note::
-            Full ROMFS repacking is not implemented. After calling this method
-            the updated Person.bin data is held in memory but cannot be written
-            back into the ROMFS container. Use :meth:`parse_table` for analysis
-            and apply edits via a dedicated tool such as pk3DS for repacking.
+        Serialises *rows* into the decompressed Person.bin staging buffer,
+        recompresses it, then rebuilds the full IVFC-wrapped ROMFS blob so
+        subsequent :meth:`parse_table` calls see the updated data.
+
+        :param name: Table name (must be ``"characters"``).
+        :param rows: Row objects previously returned by :meth:`parse_table`.
         """
         person_data = bytearray(self._get_person_data())
         person_buf = BinaryBuffer.__new__(BinaryBuffer)
@@ -111,19 +113,20 @@ class FE13Driver(FormatDriver):
             super().pack_table(name, rows)
         finally:
             self._buf = old_buf
-        self._repack_romfs()
-        self._person_data = bytes(person_data)  # only reached if _repack_romfs succeeds
+        new_compressed = compress_lz11(bytes(person_data))
+        new_romfs = self._rebuild_romfs({self._PERSON_PATH: new_compressed})
+        self._buf._shadow = bytearray(new_romfs)
+        self._person_data = bytes(person_data)
 
-    def _repack_romfs(self) -> None:
-        """Repack Person.bin.lz into ROMFS — not yet implemented.
+    def _rebuild_romfs(self, modified: dict[str, bytes | None]) -> bytes:
+        """Extract all files from the current ROMFS, merge modifications, rebuild.
 
-        :raises NotImplementedError: Always. Full ROMFS container rebuilding is
-            out of scope for this initial implementation.
+        :param modified: Map of virtual path to new content, or ``None`` to delete.
+        :returns: New IVFC-wrapped ROMFS blob.
         """
-        if self._person_data is None:
-            return
-        compress_lz11(self._person_data)  # validate compressibility
-        raise NotImplementedError(
-            "Full ROMFS repacking is not yet implemented. "
-            "Use parse_table for analysis; apply edits via a dedicated tool like pk3DS."
-        )
+        romfs = RomFS(bytes(self._buf._shadow))
+        current: dict[str, bytes | None] = {
+            path: romfs.read_file(path) for path in romfs.list_files()
+        }
+        current.update(modified)
+        return RomFSBuilder().build(current)

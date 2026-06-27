@@ -1,6 +1,11 @@
+from pathlib import Path
+
 import pytest
-from binforge.errors import RomFSBuildError
+from binforge.core.compression import compress_lz11
+from binforge.core.engine import BinaryBuffer
+from binforge.drivers.n3ds.romfs import RomFS
 from binforge.drivers.n3ds.romfs_builder import RomFSBuilder
+from binforge.errors import RomFSBuildError
 
 
 def test_duplicate_path_raises() -> None:
@@ -13,14 +18,14 @@ def test_duplicate_path_raises() -> None:
 
 def _build(files: dict[str, bytes | None]) -> object:
     """Helper: return root _DirNode without serialising."""
-    from binforge.drivers.n3ds.romfs_builder import RomFSBuilder, _DirNode
+    from binforge.drivers.n3ds.romfs_builder import RomFSBuilder
     builder = RomFSBuilder()
     norm = builder._normalise(files)
     return builder._build_tree(norm)
 
 
 def test_tree_single_file() -> None:
-    from binforge.drivers.n3ds.romfs_builder import _DirNode, _FileNode
+    from binforge.drivers.n3ds.romfs_builder import _DirNode
     root = _build({"foo.bin": b"\x01\x02"})
     assert isinstance(root, _DirNode)
     assert root.name == ""
@@ -30,7 +35,6 @@ def test_tree_single_file() -> None:
 
 
 def test_tree_nested_dir() -> None:
-    from binforge.drivers.n3ds.romfs_builder import _DirNode
     root = _build({"GameData/foo.bin": b"x", "GameData/bar.bin": b"y"})
     assert len(root.children) == 1
     child = root.children[0]
@@ -48,8 +52,6 @@ def test_tree_delete_omits_file() -> None:
 
 
 # ── Round-trip tests ─────────────────────────────────────────────────────────
-
-from binforge.drivers.n3ds.romfs import RomFS
 
 
 def test_roundtrip_single_file() -> None:
@@ -91,3 +93,64 @@ def test_delete_file() -> None:
     assert romfs.read_file("keep.bin") == b"keep"
     with pytest.raises((FileNotFoundError, ValueError, KeyError)):
         romfs.read_file("gone.bin")
+
+
+# ── Driver round-trip tests ───────────────────────────────────────────────────
+
+
+def _make_romfs_buf(path: str, raw_data: bytes) -> "BinaryBuffer":
+    """Build a minimal ROMFS BinaryBuffer containing a single compressed file."""
+    compressed = compress_lz11(raw_data)
+    blob = RomFSBuilder().build({path: compressed})
+    buf = BinaryBuffer.__new__(BinaryBuffer)
+    buf._path = Path("test.romfs")
+    buf._shadow = bytearray(blob)
+    return buf
+
+
+def test_fe13_pack_table_commits() -> None:
+    from binforge.drivers.n3ds.fe13 import FE13Driver
+
+    person_raw = bytearray(108 * 85)
+    person_raw[0x04] = 42
+    buf = _make_romfs_buf("GameData/Person.bin.lz", bytes(person_raw))
+    drv = FE13Driver(buf)
+    rows = drv.parse_table("characters")
+    assert rows[0].hp == 42
+    rows[0].hp = 99
+    drv.pack_table("characters", rows)
+    drv2 = FE13Driver(buf)
+    rows2 = drv2.parse_table("characters")
+    assert rows2[0].hp == 99
+
+
+def test_fe14_pack_table_commits() -> None:
+    from binforge.drivers.n3ds.fe14 import FE14Driver
+
+    person_raw = bytearray(84 * 130)
+    person_raw[0x04] = 77
+    buf = _make_romfs_buf("GameData/Person.bin.lz", bytes(person_raw))
+    drv = FE14Driver(buf)
+    rows = drv.parse_table("characters")
+    assert rows[0].hp == 77
+    rows[0].hp = 55
+    drv.pack_table("characters", rows)
+    drv2 = FE14Driver(buf)
+    rows2 = drv2.parse_table("characters")
+    assert rows2[0].hp == 55
+
+
+def test_fe15_pack_table_commits() -> None:
+    from binforge.drivers.n3ds.fe15 import FE15Driver
+
+    person_raw = bytearray(72 * 50)
+    person_raw[0x04] = 33
+    buf = _make_romfs_buf("GameData/Person.bin.lz", bytes(person_raw))
+    drv = FE15Driver(buf)
+    rows = drv.parse_table("characters")
+    assert rows[0].hp == 33
+    rows[0].hp = 11
+    drv.pack_table("characters", rows)
+    drv2 = FE15Driver(buf)
+    rows2 = drv2.parse_table("characters")
+    assert rows2[0].hp == 11

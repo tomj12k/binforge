@@ -63,3 +63,43 @@ class RomFS:
         data_size = struct.unpack_from("<Q", self._l3, self._file_meta_off + file_off + 0x10)[0]
         start = self._data_off + data_off
         return bytes(self._l3[start : start + int(data_size)])
+
+    def list_files(self) -> list[str]:
+        """Return all virtual file paths in the ROMFS.
+
+        :returns: List of virtual paths (e.g. ``["GameData/Person.bin.lz"]``).
+        """
+        results: list[str] = []
+        # Root directory entry is always at offset 0x18 in dir_meta section
+        self._walk_dir(0x18, "", results)
+        return results
+
+    def _walk_dir(self, dir_off: int, prefix: str, out: list[str]) -> None:
+        """Recursively collect file paths from a directory entry.
+
+        :param dir_off: Offset of this directory entry within the dir_meta section.
+        :param prefix: Virtual path prefix accumulated so far (empty for root).
+        :param out: Accumulator list for discovered file paths.
+        """
+        # Dir entry layout: parent(4) sibling(4) child_dir(4) first_file(4) hash_next(4) name_len(4) name(...)
+        first_file_off = struct.unpack_from("<I", self._l3, self._dir_meta_off + dir_off + 0x0C)[0]
+        child_dir_off = struct.unpack_from("<I", self._l3, self._dir_meta_off + dir_off + 0x08)[0]
+
+        # Walk files in this directory
+        file_off = first_file_off
+        while file_off != 0xFFFFFFFF:
+            name_len = struct.unpack_from("<I", self._l3, self._file_meta_off + file_off + 0x1C)[0]
+            name = self._read_str(self._l3, self._file_meta_off + file_off + 0x20, name_len)
+            path = f"{prefix}/{name}" if prefix else name
+            out.append(path)
+            file_off = struct.unpack_from("<I", self._l3, self._file_meta_off + file_off + 0x18)[0]
+
+        # Walk child directories
+        cdir_off = child_dir_off
+        while cdir_off != 0xFFFFFFFF:
+            name_len = struct.unpack_from("<I", self._l3, self._dir_meta_off + cdir_off + 0x14)[0]
+            name = self._read_str(self._l3, self._dir_meta_off + cdir_off + 0x18, name_len)
+            child_prefix = f"{prefix}/{name}" if prefix else name
+            sibling_off = struct.unpack_from("<I", self._l3, self._dir_meta_off + cdir_off + 0x04)[0]
+            self._walk_dir(cdir_off, child_prefix, out)
+            cdir_off = sibling_off
