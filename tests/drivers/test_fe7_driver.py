@@ -64,3 +64,25 @@ def test_pack_modifies_hp(drv: _FixtureDriver, tmp_path: Path) -> None:
 def test_three_rows_parsed(drv: _FixtureDriver) -> None:
     rows = drv.parse_table("characters")
     assert len(rows) == 3
+
+
+def test_detect_with_valid_game_code(tmp_path: Path) -> None:
+    """Test that detect() returns True for buffer with AFEE at offset 0xAC."""
+    buf_data = bytearray(0xB0)  # At least 0xB0 bytes
+    buf_data[0xAC:0xB0] = b"AFEE"
+    tmp_file = tmp_path / "test_rom.gba"
+    tmp_file.write_bytes(buf_data)
+
+    drv = FE7Driver(BinaryBuffer(tmp_file))
+    assert drv.detect(BinaryBuffer(tmp_file)) is True
+
+
+def test_detect_with_invalid_game_code(tmp_path: Path) -> None:
+    """Test that detect() returns False for buffer without AFEE at offset 0xAC."""
+    buf_data = bytearray(0xB0)  # At least 0xB0 bytes
+    buf_data[0xAC:0xB0] = b"XXXX"  # Wrong code
+    tmp_file = tmp_path / "test_rom.gba"
+    tmp_file.write_bytes(buf_data)
+
+    drv = FE7Driver(BinaryBuffer(tmp_file))
+    assert drv.detect(BinaryBuffer(tmp_file)) is False

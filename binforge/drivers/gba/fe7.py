@@ -13,7 +13,7 @@ class FE7Driver(FormatDriver):
     POINTER_BASE = 0x08000000
 
     def detect(self, buf: BinaryBuffer) -> bool:
-        return buf.read_bytes(0xAC, 12) == b"FIRE EMBLEM\x00"
+        return buf.read_bytes(0xAC, 4) == b"AFEE"
 
     def tables(self) -> dict[str, TableDef]:
         return {
