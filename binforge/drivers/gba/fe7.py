@@ -1,6 +1,7 @@
 from binforge.core.engine import BinaryBuffer
-from binforge.core.struct_types import Field, TableDef, ptr, u8
+from binforge.core.struct_types import Field, TableDef, ptr, str_ptr, u8
 from binforge.drivers.base import FormatDriver
+from binforge.drivers.gba.codec_fe7 import FE7_CODEC
 from binforge.registry import register
 
 
@@ -11,6 +12,7 @@ class FE7Driver(FormatDriver):
     MAGIC = b"FIRE EMBLEM\x00"
     ENDIAN = "little"
     POINTER_BASE = 0x08000000
+    TEXT_CODEC = FE7_CODEC
 
     def detect(self, buf: BinaryBuffer) -> bool:
         return buf.read_bytes(0xAC, 4) == b"AFEE"
@@ -22,7 +24,7 @@ class FE7Driver(FormatDriver):
                 row_size=52,
                 count=256,
                 fields=[
-                    Field("name_ptr", ptr, 0x00),
+                    Field("name_ptr", str_ptr, 0x00),
                     Field("hp", u8, 0x04),
                     Field("str", u8, 0x05),
                     Field("skl", u8, 0x06),

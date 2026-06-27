@@ -49,7 +49,8 @@ def test_parse_character_hp(drv: _FixtureDriver) -> None:
 
 def test_parse_character_name_ptr(drv: _FixtureDriver) -> None:
     rows = drv.parse_table("characters")
-    assert rows[0].name_ptr == 0x0847A820
+    # name_ptr is now a str_ptr field; raw pointer is preserved in _raw
+    assert rows[0]._raw.get("name_ptr") == 0x0847A820
 
 
 def test_pack_modifies_hp(drv: _FixtureDriver, tmp_path: Path) -> None:
@@ -99,3 +100,67 @@ def test_pack_table_overflow_raises(drv: _FixtureDriver) -> None:
     extra_rows = rows + [rows[-1]] * (tdef.count - len(rows) + 1)
     with pytest.raises(PatchSizeError):
         drv.pack_table("characters", extra_rows)
+
+
+# ── str_ptr / TEXT_CODEC integration tests ──────────────────────────────────
+
+import struct as _struct
+
+
+def _make_fe7_str_buf() -> object:
+    """Return a BinaryBuffer-like with a FE7 ROM layout containing name pointers."""
+    from pathlib import Path
+
+    from binforge.core.engine import BinaryBuffer
+    from binforge.drivers.gba.codec_fe7 import FE7_CODEC
+
+    # Build a minimal ROM with:
+    # - character table at 0x3D6C0 (file offset = 0x0803D6C0 - 0x08000000)
+    # - name "Lyn" encoded at file offset 0x3A000, pointed to by ROM addr 0x0803A000
+    rom = bytearray(0x70000)
+    name_file_off = 0x3A000
+    name_rom_addr = 0x08000000 + name_file_off
+    encoded = FE7_CODEC.encode("Lyn")
+    rom[name_file_off : name_file_off + len(encoded)] = encoded
+    # character row 0 at file offset 0x3D6C0: name_ptr at offset 0x00
+    char_file_off = 0x3D6C0
+    _struct.pack_into("<I", rom, char_file_off, name_rom_addr)
+    rom[char_file_off + 0x04] = 20  # hp
+
+    buf = BinaryBuffer.__new__(BinaryBuffer)
+    buf._path = Path("fe7_str_test.gba")
+    buf._shadow = bytearray(rom)
+    return buf
+
+
+def test_fe7_name_ptr_resolves_to_string() -> None:
+    from binforge.drivers.gba.fe7 import FE7Driver
+
+    buf = _make_fe7_str_buf()
+    drv = FE7Driver(buf)
+    rows = drv.parse_table("characters")
+    assert isinstance(rows[0].name_ptr, str)
+    assert rows[0].name_ptr == "Lyn"
+
+
+def test_fe7_name_ptr_raw_preserved() -> None:
+    from binforge.drivers.gba.fe7 import FE7Driver
+
+    buf = _make_fe7_str_buf()
+    drv = FE7Driver(buf)
+    rows = drv.parse_table("characters")
+    assert rows[0]._raw.get("name_ptr") == 0x0803A000
+
+
+def test_fe7_pack_table_reencodes_name() -> None:
+    from binforge.drivers.gba.codec_fe7 import FE7_CODEC  # noqa: F401
+    from binforge.drivers.gba.fe7 import FE7Driver
+
+    buf = _make_fe7_str_buf()
+    drv = FE7Driver(buf)
+    rows = drv.parse_table("characters")
+    rows[0].name_ptr = "Lyn"  # same 3-char name — same encoded length
+    drv.pack_table("characters", rows)
+    drv2 = FE7Driver(buf)
+    rows2 = drv2.parse_table("characters")
+    assert rows2[0].name_ptr == "Lyn"
