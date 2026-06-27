@@ -11,6 +11,7 @@ import pytest
 from binforge.core.engine import BinaryBuffer
 from binforge.core.struct_types import TableDef
 from binforge.drivers.gba.fe7 import FE7Driver
+from binforge.errors import PatchSizeError
 
 
 class _FixtureDriver(FE7Driver):
@@ -88,3 +89,13 @@ def test_detect_with_invalid_game_code(tmp_path: Path) -> None:
 
     drv = FE7Driver(BinaryBuffer(tmp_file))
     assert drv.detect(BinaryBuffer(tmp_file)) is False
+
+
+def test_pack_table_overflow_raises(drv: _FixtureDriver) -> None:
+    """Passing more rows than tdef.count must raise PatchSizeError."""
+    rows = drv.parse_table("characters")
+    tdef = drv.tables()["characters"]
+    # Duplicate last row to exceed declared count
+    extra_rows = rows + [rows[-1]] * (tdef.count - len(rows) + 1)
+    with pytest.raises(PatchSizeError):
+        drv.pack_table("characters", extra_rows)

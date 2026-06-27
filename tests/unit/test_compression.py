@@ -48,3 +48,19 @@ def test_lz10_preserves_size():
 def test_lz11_preserves_size():
     original = bytes(range(256))
     assert decompress_lz11(compress_lz11(original)) == original
+
+
+def test_lz10_truncated_raises_decompression_error():
+    """Truncated LZ10 stream (valid header, empty body) must raise DecompressionError."""
+    # Header declares 10 bytes of output but provides no compressed body
+    header = bytes([0x10, 0x0A, 0x00, 0x00])
+    with pytest.raises(DecompressionError):
+        decompress_lz10(header)
+
+
+def test_lz11_truncated_raises_decompression_error():
+    """Truncated LZ11 stream (valid header, empty body) must raise DecompressionError."""
+    # Header declares 10 bytes of output but provides no compressed body
+    header = bytes([0x11, 0x0A, 0x00, 0x00])
+    with pytest.raises(DecompressionError):
+        decompress_lz11(header)

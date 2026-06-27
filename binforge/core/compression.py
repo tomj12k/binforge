@@ -1,5 +1,7 @@
 """Compression codecs for binary data."""
 
+import struct
+
 from binforge.errors import DecompressionError
 
 
@@ -19,21 +21,27 @@ def decompress_lz10(data: bytes) -> bytes:
     out = bytearray()
     pos = 4
     while len(out) < size:
-        flags = data[pos]
+        try:
+            flags = data[pos]
+        except IndexError as exc:
+            raise DecompressionError("LZ10 truncated: missing control byte") from exc
         pos += 1
-        for bit in range(7, -1, -1):
-            if len(out) >= size:
-                break
-            if flags & (1 << bit):
-                block = (data[pos] << 8) | data[pos + 1]
-                pos += 2
-                length = ((block >> 12) & 0xF) + 3
-                disp = (block & 0xFFF) + 1
-                for _ in range(length):
-                    out.append(out[-disp])
-            else:
-                out.append(data[pos])
-                pos += 1
+        try:
+            for bit in range(7, -1, -1):
+                if len(out) >= size:
+                    break
+                if flags & (1 << bit):
+                    block = (data[pos] << 8) | data[pos + 1]
+                    pos += 2
+                    length = ((block >> 12) & 0xF) + 3
+                    disp = (block & 0xFFF) + 1
+                    for _ in range(length):
+                        out.append(out[-disp])
+                else:
+                    out.append(data[pos])
+                    pos += 1
+        except (IndexError, struct.error) as exc:
+            raise DecompressionError(str(exc)) from exc
     return bytes(out[:size])
 
 
@@ -73,36 +81,42 @@ def decompress_lz11(data: bytes) -> bytes:
     out = bytearray()
     pos = 4
     while len(out) < size:
-        flags = data[pos]
+        try:
+            flags = data[pos]
+        except IndexError as exc:
+            raise DecompressionError("LZ11 truncated: missing control byte") from exc
         pos += 1
-        for bit in range(7, -1, -1):
-            if len(out) >= size:
-                break
-            if flags & (1 << bit):
-                b0 = data[pos]
-                indicator = (b0 >> 4) & 0xF
-                if indicator == 0:
-                    length = ((b0 & 0xF) << 4) | ((data[pos + 1] >> 4) & 0xF)
-                    length += 17
-                    disp = ((data[pos + 1] & 0xF) << 8) | data[pos + 2]
-                    pos += 3
-                elif indicator == 1:
-                    b1_hi = data[pos + 1] << 4
-                    b2_hi = (data[pos + 2] >> 4) & 0xF
-                    length = ((b0 & 0xF) << 12) | b1_hi | b2_hi
-                    length += 273
-                    disp = ((data[pos + 2] & 0xF) << 8) | data[pos + 3]
-                    pos += 4
+        try:
+            for bit in range(7, -1, -1):
+                if len(out) >= size:
+                    break
+                if flags & (1 << bit):
+                    b0 = data[pos]
+                    indicator = (b0 >> 4) & 0xF
+                    if indicator == 0:
+                        length = ((b0 & 0xF) << 4) | ((data[pos + 1] >> 4) & 0xF)
+                        length += 17
+                        disp = ((data[pos + 1] & 0xF) << 8) | data[pos + 2]
+                        pos += 3
+                    elif indicator == 1:
+                        b1_hi = data[pos + 1] << 4
+                        b2_hi = (data[pos + 2] >> 4) & 0xF
+                        length = ((b0 & 0xF) << 12) | b1_hi | b2_hi
+                        length += 273
+                        disp = ((data[pos + 2] & 0xF) << 8) | data[pos + 3]
+                        pos += 4
+                    else:
+                        length = indicator + 1
+                        disp = ((b0 & 0xF) << 8) | data[pos + 1]
+                        pos += 2
+                    disp += 1
+                    for _ in range(length):
+                        out.append(out[-disp])
                 else:
-                    length = indicator + 1
-                    disp = ((b0 & 0xF) << 8) | data[pos + 1]
-                    pos += 2
-                disp += 1
-                for _ in range(length):
-                    out.append(out[-disp])
-            else:
-                out.append(data[pos])
-                pos += 1
+                    out.append(data[pos])
+                    pos += 1
+        except (IndexError, struct.error) as exc:
+            raise DecompressionError(str(exc)) from exc
     return bytes(out[:size])
 
 

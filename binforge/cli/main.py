@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import struct
 import sys
 from pathlib import Path
 
@@ -125,7 +126,7 @@ def patch(
         drv.pack_table(table, rows)
         drv.commit(out)
         click.echo(f"Written to {out}")
-    except BinforgeError as e:
+    except (BinforgeError, struct.error) as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import struct
 from pathlib import Path
 
 from binforge.core.compression import compress_lz11, decompress_lz11
@@ -7,6 +8,7 @@ from binforge.core.engine import BinaryBuffer
 from binforge.core.struct_types import Field, TableDef, u8, u32
 from binforge.drivers.base import FormatDriver
 from binforge.drivers.n3ds.romfs import RomFS
+from binforge.errors import DecompressionError
 from binforge.registry import register
 
 _PERSON_PATH = "GameData/Person.bin.lz"
@@ -38,12 +40,15 @@ class FE13Driver(FormatDriver):
             return False
         return self._has_awakening_marker(buf)
 
+    _FE13_PERSON_SIZE = 108 * 85  # 9180 bytes — unique to Awakening
+
     def _has_awakening_marker(self, buf: BinaryBuffer) -> bool:
         try:
             romfs = RomFS(bytes(buf._shadow))
-            romfs.read_file(_PERSON_PATH)
-            return True
-        except Exception:
+            compressed = romfs.read_file(_PERSON_PATH)
+            decompressed = decompress_lz11(compressed)
+            return len(decompressed) == self._FE13_PERSON_SIZE
+        except (DecompressionError, ValueError, OSError, struct.error):
             return False
 
     def _get_person_data(self) -> bytes:
@@ -106,8 +111,8 @@ class FE13Driver(FormatDriver):
             super().pack_table(name, rows)
         finally:
             self._buf = old_buf
-        self._person_data = bytes(person_data)
         self._repack_romfs()
+        self._person_data = bytes(person_data)  # only reached if _repack_romfs succeeds
 
     def _repack_romfs(self) -> None:
         """Repack Person.bin.lz into ROMFS — not yet implemented.

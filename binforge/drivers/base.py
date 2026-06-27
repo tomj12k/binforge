@@ -7,7 +7,7 @@ from typing import Any
 from binforge.core.engine import BinaryBuffer
 from binforge.core.pointer import PointerTable
 from binforge.core.struct_types import FieldType, Struct, TableDef
-from binforge.errors import TableNotFoundError
+from binforge.errors import PatchSizeError, TableNotFoundError
 
 
 class FormatDriver(ABC):
@@ -46,6 +46,12 @@ class FormatDriver(ABC):
         tdef = self.tables().get(name)
         if tdef is None:
             raise TableNotFoundError(name)
+        if len(rows) > tdef.count:
+            raise PatchSizeError(
+                tdef.offset + tdef.count * tdef.row_size,
+                len(rows) * tdef.row_size,
+                len(self._buf._shadow),
+            )
         file_offset = self._ptr.resolve(tdef.offset)
         ec = ">" if self.ENDIAN == "big" else "<"
         for i, row in enumerate(rows):
