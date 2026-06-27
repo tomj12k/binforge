@@ -46,23 +46,72 @@ def decompress_lz10(data: bytes) -> bytes:
 
 
 def compress_lz10(data: bytes) -> bytes:
-    """Compress data using LZ10 format (Nintendo GBA).
+    """Compress data using Nintendo LZ10 (GBA) sliding-window format.
 
-    Simple literal-only compression. Valid but unoptimized.
+    Uses a 4096-byte sliding window with match lengths of 3–18 bytes.
+    Flag byte bit=1 means back-reference; bit=0 means literal (matching
+    the decompressor's convention).
 
-    :param data: Data to compress
-    :returns: Compressed bytes with 0x10 magic byte
+    :param data: Raw bytes to compress.
+    :returns: LZ10-compressed bytes including the 4-byte header.
     """
-    size = len(data)
-    header = bytes([0x10, size & 0xFF, (size >> 8) & 0xFF, (size >> 16) & 0xFF])
-    out = bytearray(header)
-    i = 0
-    while i < size:
-        chunk = data[i : i + 8]
-        out.append(0x00)  # all-literal flag byte
-        out.extend(chunk)
-        i += len(chunk)
-    return bytes(out)
+    src_len = len(data)
+    header = bytes([0x10, src_len & 0xFF, (src_len >> 8) & 0xFF, (src_len >> 16) & 0xFF])
+
+    compressed = bytearray()
+    # `decoded` tracks what the decompressor would have produced — used as the search window.
+    decoded = bytearray()
+    src_pos = 0
+
+    while src_pos < src_len:
+        flag_pos = len(compressed)
+        compressed.append(0)  # placeholder for flag byte
+        flag = 0
+
+        for bit_idx in range(8):
+            if src_pos >= src_len:
+                break
+
+            # Search window: up to 4096 bytes of decoded history.
+            win_start = max(0, len(decoded) - 4096)
+            window = decoded[win_start:]
+            win_len = len(window)
+
+            best_len = 0
+            best_disp = 0
+
+            for w_off in range(win_len):
+                mlen = 0
+                span = win_len - w_off  # bytes from w_off to end of window
+                while mlen < 18 and (src_pos + mlen) < src_len:
+                    # Allow overlapping matches (run-length encoding style).
+                    win_idx = w_off + (mlen % span)
+                    if window[win_idx] != data[src_pos + mlen]:
+                        break
+                    mlen += 1
+
+                if mlen >= 3 and mlen > best_len:
+                    best_len = mlen
+                    best_disp = span  # 1-based displacement = win_len - w_off
+
+            if best_len >= 3:
+                # Back-reference: set flag bit to 1.
+                flag |= 1 << (7 - bit_idx)
+                rl = best_len - 3        # 0–15, fits in 4 bits
+                rd = best_disp - 1      # 0–4095, fits in 12 bits
+                compressed.append((rl << 4) | (rd >> 8))
+                compressed.append(rd & 0xFF)
+                decoded.extend(data[src_pos : src_pos + best_len])
+                src_pos += best_len
+            else:
+                # Literal: flag bit stays 0.
+                compressed.append(data[src_pos])
+                decoded.append(data[src_pos])
+                src_pos += 1
+
+        compressed[flag_pos] = flag
+
+    return header + bytes(compressed)
 
 
 # ── LZ11 (Nintendo 3DS) ──────────────────────────────────────────────────────

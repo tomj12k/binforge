@@ -64,3 +64,26 @@ def test_lz11_truncated_raises_decompression_error():
     header = bytes([0x11, 0x0A, 0x00, 0x00])
     with pytest.raises(DecompressionError):
         decompress_lz11(header)
+
+
+def test_lz10_compress_smaller_than_literal_only() -> None:
+    """Real compression should beat literal-only for repetitive data."""
+    data = b"\xAB\xCD" * 512  # 1024 bytes of repeating pattern
+    compressed = compress_lz10(data)
+    # literal-only would be: 4-byte header + ceil(1024/8) flag bytes + 1024 data = ~1152 bytes
+    # real compression of repeating data should be << 100 bytes
+    assert len(compressed) < len(data) // 2, (
+        f"Expected real compression, got {len(compressed)} bytes for {len(data)}-byte input"
+    )
+
+
+def test_lz10_roundtrip_after_real_compression() -> None:
+    """Compress -> decompress -> original bytes."""
+    data = b"Fire Emblem " * 100  # 1200 bytes with repetition
+    assert decompress_lz10(compress_lz10(data)) == data
+
+
+def test_lz10_roundtrip_random_like() -> None:
+    """Compress -> decompress works even when compression ratio < 1."""
+    data = bytes(range(256)) * 4  # 1024 bytes, low entropy
+    assert decompress_lz10(compress_lz10(data)) == data
