@@ -10,6 +10,7 @@ import click
 
 import binforge
 from binforge.errors import BinforgeError
+from binforge.repl.shell import launch as _repl_launch
 
 
 @click.group()
@@ -28,9 +29,7 @@ def detect(file: str) -> None:
         sys.exit(1)
 
     click.echo(
-        f"Detected: {type(drv).__name__}  "
-        f"endian={drv.ENDIAN}  "
-        f"ptr_base=0x{drv.POINTER_BASE:08X}"
+        f"Detected: {type(drv).__name__}  endian={drv.ENDIAN}  ptr_base=0x{drv.POINTER_BASE:08X}"
     )
     click.echo(f"Tables: {', '.join(drv.table_names())}")
 
@@ -152,3 +151,10 @@ def repack(file: str, table: str, from_file: str, out: str) -> None:
         from_file=from_file,
         out=out,
     )
+
+
+@cli.command(name="shell")
+@click.argument("file", type=click.Path(exists=True))
+def shell_cmd(file: str) -> None:
+    """Open FILE in an interactive REPL with the ROM pre-loaded as `rom`."""
+    _repl_launch(file)
