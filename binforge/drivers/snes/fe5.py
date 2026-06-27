@@ -3,7 +3,8 @@ from binforge.core.struct_types import Field, TableDef, u8, u16
 from binforge.drivers.base import FormatDriver
 from binforge.registry import register
 
-_FE5_TITLE = b"FIREEMBLEM5       "  # 18 bytes at 0x7FC0 — verify against your ROM
+# Thracia 776 (JP) SNES LoROM header title — 21 bytes at 0x7FC0
+_FE5_TITLE = b"FIRE EMBLEM 776     "  # 20 chars + 1 space = 21 bytes
 
 
 @register
@@ -15,7 +16,7 @@ class FE5Driver(FormatDriver):
     POINTER_BASE = 0x000000
 
     def detect(self, buf: BinaryBuffer) -> bool:
-        return buf.read_bytes(0x7FC0, 18) == _FE5_TITLE
+        return buf.read_bytes(0x7FC0, len(_FE5_TITLE)) == _FE5_TITLE
 
     def tables(self) -> dict[str, TableDef]:
         return {
