@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import struct
-from pathlib import Path
 
 from binforge.core.compression import compress_lz11, decompress_lz11
 from binforge.core.engine import BinaryBuffer
@@ -52,7 +51,7 @@ class FE13Driver(FormatDriver):
 
     def _has_awakening_marker(self, buf: BinaryBuffer) -> bool:
         try:
-            romfs = RomFS(bytes(buf._shadow))
+            romfs = RomFS(bytes(buf))
             compressed = romfs.read_file(_PERSON_PATH)
             decompressed = decompress_lz11(compressed)
             return len(decompressed) == self._FE13_PERSON_SIZE
@@ -62,7 +61,7 @@ class FE13Driver(FormatDriver):
     def _get_lz_data(self, romfs_path: str) -> bytes:
         """Decompress and cache a ROMFS LZ11 file by virtual path."""
         if romfs_path not in self._lz_cache:
-            romfs = RomFS(bytes(self._buf._shadow))
+            romfs = RomFS(bytes(self._buf))
             compressed = romfs.read_file(romfs_path)
             self._lz_cache[romfs_path] = decompress_lz11(compressed)
         return self._lz_cache[romfs_path]
@@ -105,9 +104,7 @@ class FE13Driver(FormatDriver):
         """Parse a table from the appropriate decompressed ROMFS file."""
         romfs_path = self._TABLE_PATHS.get(name, self._PERSON_PATH)
         raw = self._get_lz_data(romfs_path)
-        lz_buf = BinaryBuffer.__new__(BinaryBuffer)
-        lz_buf._path = Path(romfs_path.split("/")[-1])
-        lz_buf._shadow = bytearray(raw)
+        lz_buf = BinaryBuffer.from_bytes(raw, name=romfs_path.split("/")[-1])
         old_buf = self._buf
         self._buf = lz_buf
         try:
@@ -130,20 +127,21 @@ class FE13Driver(FormatDriver):
         romfs_path = self._TABLE_PATHS.get(name)
         if romfs_path is None:
             raise TableNotFoundError(name)
-        table_data = bytearray(self._get_lz_data(romfs_path))
-        table_buf = BinaryBuffer.__new__(BinaryBuffer)
-        table_buf._path = Path(romfs_path.split("/")[-1].removesuffix(".lz"))
-        table_buf._shadow = table_data
+        table_buf = BinaryBuffer.from_bytes(
+            self._get_lz_data(romfs_path),
+            name=romfs_path.split("/")[-1].removesuffix(".lz"),
+        )
         old_buf = self._buf
         self._buf = table_buf
         try:
             super().pack_table(name, rows)
         finally:
             self._buf = old_buf
-        new_compressed = compress_lz11(bytes(table_data))
+        new_table_data = bytes(table_buf)
+        new_compressed = compress_lz11(new_table_data)
         new_romfs = self._rebuild_romfs({romfs_path: new_compressed})
-        self._buf._shadow = bytearray(new_romfs)
-        self._lz_cache[romfs_path] = bytes(table_data)
+        self._buf.replace_contents(new_romfs)
+        self._lz_cache[romfs_path] = new_table_data
 
     def _rebuild_romfs(self, modified: dict[str, bytes | None]) -> bytes:
         """Extract all files from the current ROMFS, merge modifications, rebuild.
@@ -151,7 +149,7 @@ class FE13Driver(FormatDriver):
         :param modified: Map of virtual path to new content, or ``None`` to delete.
         :returns: New IVFC-wrapped ROMFS blob.
         """
-        romfs = RomFS(bytes(self._buf._shadow))
+        romfs = RomFS(bytes(self._buf))
         current: dict[str, bytes | None] = {
             path: romfs.read_file(path) for path in romfs.list_files()
         }

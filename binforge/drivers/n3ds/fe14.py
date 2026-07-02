@@ -30,7 +30,7 @@ class FE14Driver(FE13Driver):
         if buf.read_bytes(0, 4) != b"IVFC":
             return False
         try:
-            romfs = RomFS(bytes(buf._shadow))
+            romfs = RomFS(bytes(buf))
             data = decompress_lz11(romfs.read_file(_FATES_PATH))
             return len(data) == self._FE14_PERSON_SIZE
         except (DecompressionError, ValueError, OSError, struct.error):

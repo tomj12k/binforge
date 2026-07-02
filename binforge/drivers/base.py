@@ -56,7 +56,7 @@ class FormatDriver(ABC):
             raise PatchSizeError(
                 tdef.offset + tdef.count * tdef.row_size,
                 len(rows) * tdef.row_size,
-                len(self._buf._shadow),
+                len(self._buf),
             )
         file_offset = self._ptr.resolve(tdef.offset)
         ec = ">" if self.ENDIAN == "big" else "<"
@@ -78,15 +78,9 @@ class FormatDriver(ABC):
             self._pending_raw[field_name] = raw_ptr
             if self.TEXT_CODEC is not None:
                 file_off = self._ptr.resolve(raw_ptr)
-                raw_bytes = bytearray()
-                pos = file_off
-                while 0 <= pos < len(self._buf._shadow):
-                    b = self._buf.read_u8(pos)
-                    if b == 0x00:
-                        break
-                    raw_bytes.append(b)
-                    pos += 1
-                return self.TEXT_CODEC.decode_bytes(bytes(raw_bytes))
+                if not (0 <= file_off < len(self._buf)):
+                    return self.TEXT_CODEC.decode_bytes(b"")
+                return self.TEXT_CODEC.decode_bytes(self._buf.read_cstring(file_off))
             return raw_ptr
         if ft.is_str:
             return (
@@ -115,14 +109,14 @@ class FormatDriver(ABC):
                 big = self.ENDIAN == "big"
                 raw_ptr = self._buf.read_u32(offset, big=big)
                 file_off = self._ptr.resolve(raw_ptr)
-                if not (0 <= file_off < len(self._buf._shadow)):
+                if not (0 <= file_off < len(self._buf)):
                     if value == "":
                         # Round-trip of a null/out-of-range pointer: parse
                         # decoded it to "" and nothing was edited — no-op.
                         return
-                    raise PointerRangeError(raw_ptr, len(self._buf._shadow))
+                    raise PointerRangeError(raw_ptr, len(self._buf))
                 existing_len = 0
-                while 0 <= file_off + existing_len < len(self._buf._shadow):
+                while 0 <= file_off + existing_len < len(self._buf):
                     if self._buf.read_u8(file_off + existing_len) == 0x00:
                         existing_len += 1
                         break
