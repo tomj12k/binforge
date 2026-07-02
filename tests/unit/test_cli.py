@@ -239,3 +239,144 @@ def test_repack_delegates_to_patch(tmp_path: Path) -> None:
         )
     assert result.exit_code == 0
     assert "Written to" in result.output
+
+
+# ---------------------------------------------------------------------------
+# hex
+# ---------------------------------------------------------------------------
+
+
+def test_hex_basic(tmp_path: Path) -> None:
+    f = tmp_path / "raw.bin"
+    f.write_bytes(bytes(range(32)))
+    runner = CliRunner()
+    result = runner.invoke(cli, ["hex", str(f), "0", "--length", "16"])
+    assert result.exit_code == 0
+    assert "00000000" in result.output
+    assert "00 01 02 03 04 05 06 07  08 09 0a 0b 0c 0d 0e 0f" in result.output
+
+
+def test_hex_accepts_hex_offset(tmp_path: Path) -> None:
+    f = tmp_path / "raw.bin"
+    f.write_bytes(b"\x00" * 0x10 + b"\xaa\xbb")
+    runner = CliRunner()
+    result = runner.invoke(cli, ["hex", str(f), "0x10", "--length", "2"])
+    assert result.exit_code == 0
+    assert "00000010" in result.output
+    assert "aa bb" in result.output
+
+
+def test_hex_rejects_bad_offset(tmp_path: Path) -> None:
+    f = tmp_path / "raw.bin"
+    f.write_bytes(b"\x00")
+    runner = CliRunner()
+    result = runner.invoke(cli, ["hex", str(f), "zebra"])
+    assert result.exit_code != 0
+    assert "not a valid integer" in result.output
+
+
+# ---------------------------------------------------------------------------
+# find
+# ---------------------------------------------------------------------------
+
+
+def test_find_prints_offsets(tmp_path: Path) -> None:
+    f = tmp_path / "raw.bin"
+    f.write_bytes(b"\x00\xaf\xee\x00\x00\xaf\xee\x00")
+    runner = CliRunner()
+    result = runner.invoke(cli, ["find", str(f), "AF EE 00"])
+    assert result.exit_code == 0
+    assert result.output.splitlines() == ["0x00000001", "0x00000005"]
+
+
+def test_find_no_matches(tmp_path: Path) -> None:
+    f = tmp_path / "raw.bin"
+    f.write_bytes(b"\x00" * 8)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["find", str(f), "ff ff"])
+    assert result.exit_code == 0
+    assert "no matches" in result.output
+
+
+def test_find_respects_limit(tmp_path: Path) -> None:
+    f = tmp_path / "raw.bin"
+    f.write_bytes(b"\xaa" * 10)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["find", str(f), "aa", "--limit", "3"])
+    assert result.exit_code == 0
+    assert len(result.output.splitlines()) == 3
+
+
+# ---------------------------------------------------------------------------
+# diff
+# ---------------------------------------------------------------------------
+
+
+def test_diff_two_regions(tmp_path: Path) -> None:
+    a = tmp_path / "a.bin"
+    b = tmp_path / "b.bin"
+    data = bytearray(b"\x00" * 64)
+    a.write_bytes(bytes(data))
+    data[4] = 0xFF
+    data[40] = 0xEE
+    b.write_bytes(bytes(data))
+    runner = CliRunner()
+    result = runner.invoke(cli, ["diff", str(a), str(b)])
+    assert result.exit_code == 0
+    assert "-- 0x00000004 (1 bytes)" in result.output
+    assert "-- 0x00000028 (1 bytes)" in result.output
+
+
+def test_diff_max_regions(tmp_path: Path) -> None:
+    a = tmp_path / "a.bin"
+    b = tmp_path / "b.bin"
+    data = bytearray(b"\x00" * 64)
+    a.write_bytes(bytes(data))
+    for off in (0, 16, 32, 48):
+        data[off] = 0xFF
+    b.write_bytes(bytes(data))
+    runner = CliRunner()
+    result = runner.invoke(cli, ["diff", str(a), str(b), "--max-regions", "2"])
+    assert result.exit_code == 0
+    assert result.output.count("-- 0x") == 2
+    assert "... 2 more regions" in result.output
+
+
+def test_diff_identical_files(tmp_path: Path) -> None:
+    a = tmp_path / "a.bin"
+    b = tmp_path / "b.bin"
+    a.write_bytes(b"\x01\x02")
+    b.write_bytes(b"\x01\x02")
+    runner = CliRunner()
+    result = runner.invoke(cli, ["diff", str(a), str(b)])
+    assert result.exit_code == 0
+    assert "identical" in result.output
+
+
+def test_diff_length_mismatch_note(tmp_path: Path) -> None:
+    a = tmp_path / "a.bin"
+    b = tmp_path / "b.bin"
+    a.write_bytes(b"\x00" * 8)
+    b.write_bytes(b"\x00" * 8 + b"\xff" * 4)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["diff", str(a), str(b)])
+    assert result.exit_code == 0
+    assert "sizes differ (8 vs 12 bytes)" in result.output
+
+
+# ---------------------------------------------------------------------------
+# dump --format table
+# ---------------------------------------------------------------------------
+
+
+def test_dump_table_format(tmp_path: Path) -> None:
+    f = tmp_path / "game.bin"
+    f.write_bytes(b"\x00" * 16)
+    drv = _make_driver()
+    runner = CliRunner()
+    with patch("binforge.open", return_value=drv):
+        result = runner.invoke(cli, ["dump", str(f), "chars", "--format", "table"])
+    assert result.exit_code == 0
+    lines = result.output.splitlines()
+    assert lines[0].split() == ["id", "hp"]
+    assert lines[1].split() == ["1", "20"]

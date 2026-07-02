@@ -40,6 +40,30 @@ uv run binforge patch fe7.gba characters --row 0 --field hp --value 99 --out fe7
 uv run binforge patch fe7.gba characters --from-file edits.json --out fe7_patched.gba
 ```
 
+## Exploring
+
+```bash
+# Hexdump 256 bytes at an offset (hex or decimal)
+uv run binforge hex fe7.gba 0xBDCE18 --length 64
+
+# Find a byte pattern (hex string, quote it)
+uv run binforge find fe7.gba "12 00 04 09" --limit 10
+
+# Byte-diff two ROMs, hexdumps of each changed region
+uv run binforge diff fe7.gba fe7_patched.gba --context 8
+```
+
+The REPL preloads exploration helpers (`buf`, `hexdump`, `find`, `deref`, `view`, `dirty`, `print_table`):
+
+```python
+>>> hexdump(0xBDCE18, 32)              # classic hexdump at a file offset
+>>> find("12 00 04 09")                # → [12439064, ...]
+>>> deref(0x08BDCE18, 32)              # follow a pointer, dump + text preview
+>>> rows = view(0x08BDCE18, 16, 4)     # ad-hoc 16-byte-row table hypothesis
+>>> print_table(rows)                  # aligned columnar print
+>>> dirty()                            # 0x00bdce18 +2, or "clean"
+```
+
 ## REPL Quickstart
 
 ```bash

@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from binforge.core.engine import BinaryBuffer
+from binforge.core.engine import BinaryBuffer, diff_spans
 from binforge.errors import PatchSizeError, CommitError
 
 
@@ -242,3 +242,44 @@ def test_replace_contents_swaps_shadow():
     buf.replace_contents(b"\xaa\xbb\xcc")
     assert bytes(buf) == b"\xaa\xbb\xcc"
     assert len(buf) == 3
+
+
+# ---------------------------------------------------------------------------
+# diff_spans
+# ---------------------------------------------------------------------------
+
+
+def test_diff_spans_identical():
+    assert diff_spans(b"\x00" * 16, b"\x00" * 16) == []
+
+
+def test_diff_spans_single_region():
+    a = b"\x00" * 16
+    b = b"\x00" * 4 + b"\xff\xff" + b"\x00" * 10
+    assert diff_spans(a, b) == [(4, 2)]
+
+
+def test_diff_spans_merges_gap_le_4():
+    a = bytearray(b"\x00" * 32)
+    b = bytearray(a)
+    b[4] = 0xFF
+    b[9] = 0xFF  # gap of 4 -> merged
+    assert diff_spans(bytes(a), bytes(b)) == [(4, 6)]
+
+
+def test_diff_spans_gap_over_4_stays_separate():
+    a = bytearray(b"\x00" * 32)
+    b = bytearray(a)
+    b[4] = 0xFF
+    b[10] = 0xFF  # gap of 5 -> separate
+    assert diff_spans(bytes(a), bytes(b)) == [(4, 1), (10, 1)]
+
+
+def test_diff_spans_scans_common_prefix_only():
+    assert diff_spans(b"\x00\x00", b"\x00\x00\xff\xff") == []
+
+
+def test_hexdump_width_zero_raises():
+    buf = BinaryBuffer.from_bytes(b"\x00" * 8)
+    with pytest.raises(ValueError):
+        buf.hexdump(0, 8, width=0)

@@ -6,6 +6,41 @@ from pathlib import Path
 from binforge.errors import CommitError, PatchSizeError
 
 
+def diff_spans(a: bytes, b: bytes, gap: int = 4) -> list[tuple[int, int]]:
+    """Return (offset, length) spans where two byte strings differ.
+
+    Adjacent/nearby differing spans separated by ``gap`` or fewer equal
+    bytes are merged into one span. Only the common prefix length
+    ``min(len(a), len(b))`` is scanned; callers must handle length
+    mismatches themselves.
+
+    :param a: First byte string
+    :type a: bytes
+    :param b: Second byte string
+    :type b: bytes
+    :param gap: Maximum run of equal bytes to absorb when merging spans
+    :type gap: int
+    :returns: Merged differing spans, empty if identical
+    :rtype: list[tuple[int, int]]
+    """
+    spans: list[tuple[int, int]] = []
+    i = 0
+    n = min(len(a), len(b))
+    while i < n:
+        if a[i] != b[i]:
+            start = i
+            while i < n and a[i] != b[i]:
+                i += 1
+            if spans and start - (spans[-1][0] + spans[-1][1]) <= gap:
+                prev_start, _ = spans[-1]
+                spans[-1] = (prev_start, i - prev_start)
+            else:
+                spans.append((start, i - start))
+        else:
+            i += 1
+    return spans
+
+
 class BinaryBuffer:
     """Read and patch binary files with lazy in-memory shadow buffer.
 
@@ -177,7 +212,10 @@ class BinaryBuffer:
         :type width: int
         :returns: Formatted hexdump (no trailing newline)
         :rtype: str
+        :raises ValueError: If ``width`` is less than 1
         """
+        if width < 1:
+            raise ValueError("width must be >= 1")
         end = min(offset + length, len(self._shadow))
         lines: list[str] = []
         half = width // 2
@@ -219,35 +257,21 @@ class BinaryBuffer:
         return offsets
 
     def dirty_ranges(self) -> list[tuple[int, int]]:
-        """Return (offset, length) spans where the shadow differs from the file.
+        """Return (offset, length) spans where the shadow differs from the original load-time contents.
 
         Diffs the shadow against the ORIGINAL contents captured at load time,
         merging adjacent/nearby spans (gap <= 4 bytes). If the shadow length
         has changed (e.g. a 3DS ROMFS rebuild replaces the whole shadow),
         a byte-wise diff is meaningless, so the entire buffer is reported
-        dirty as ``[(0, len(shadow))]``.
+        dirty as ``[(0, len(shadow))]``. Note that :meth:`commit` does NOT
+        reset the baseline: spans remain dirty after a commit.
 
         :returns: Merged dirty spans, empty if nothing changed
         :rtype: list[tuple[int, int]]
         """
         if len(self._shadow) != len(self._original):
             return [(0, len(self._shadow))]
-        spans: list[tuple[int, int]] = []
-        i = 0
-        n = len(self._shadow)
-        while i < n:
-            if self._shadow[i] != self._original[i]:
-                start = i
-                while i < n and self._shadow[i] != self._original[i]:
-                    i += 1
-                if spans and start - (spans[-1][0] + spans[-1][1]) <= 4:
-                    prev_start, _ = spans[-1]
-                    spans[-1] = (prev_start, i - prev_start)
-                else:
-                    spans.append((start, i - start))
-            else:
-                i += 1
-        return spans
+        return diff_spans(bytes(self._shadow), self._original)
 
     def replace_contents(self, data: bytes) -> None:
         """Replace the entire shadow buffer (e.g. after a ROMFS rebuild).
