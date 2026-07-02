@@ -337,3 +337,13 @@ def test_deref_with_text_codec_appends_decoded_line():
     out = drv.deref(0, length=4)
     assert "text: 'Hi'" in out
     path.unlink()
+
+
+def test_view_negative_resolve_raises() -> None:
+    """view() with an offset below POINTER_BASE raises instead of wrapping."""
+    from binforge.errors import PointerRangeError
+
+    buf, Drv = _make_str_ptr_driver_buf()  # POINTER_BASE = 0x08000000
+    drv = Drv(buf)
+    with pytest.raises(PointerRangeError):
+        drv.view(0x100, 4, 2)

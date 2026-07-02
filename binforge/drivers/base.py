@@ -69,8 +69,13 @@ class FormatDriver(ABC):
         :param fields: Optional field layout; if ``None``, one u8 field per
             byte is synthesized (``b0`` .. ``b{row_size-1}``).
         :returns: List of parsed rows.
+        :raises PointerRangeError: If ``offset`` resolves below the start of
+            the buffer (e.g. a raw file offset passed to a driver with a
+            nonzero ``POINTER_BASE``).
         """
         file_offset = self._ptr.resolve(offset)
+        if file_offset < 0:
+            raise PointerRangeError(offset, len(self._buf))
         if fields is None:
             fields = [Field(f"b{i}", u8, i) for i in range(row_size)]
         max_rows = max(0, (len(self._buf) - file_offset) // row_size)
