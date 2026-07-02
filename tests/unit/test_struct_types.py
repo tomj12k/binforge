@@ -1,3 +1,5 @@
+import pytest
+
 from binforge.core.struct_types import (
     Field,
     Struct,
@@ -88,3 +90,33 @@ def test_struct_has_raw_dict() -> None:
     s = Struct(["name"], name="Lyn")
     assert hasattr(s, "_raw")
     assert isinstance(s._raw, dict)
+
+
+# ── Struct attribute validation ──────────────────────────────────────────────
+
+
+def test_setattr_valid_field():
+    row = Struct(["hp", "str"], hp=10, str=5)
+    row.hp = 99
+    assert row.hp == 99
+
+
+def test_setattr_typo_raises_with_suggestion():
+    row = Struct(["hp", "str"], hp=10, str=5)
+    with pytest.raises(AttributeError) as exc:
+        row.hpp = 5
+    assert "hpp" in str(exc.value)
+    assert "hp" in str(exc.value)
+
+
+def test_setattr_unknown_no_close_match():
+    row = Struct(["hp"], hp=10)
+    with pytest.raises(AttributeError) as exc:
+        row.zzz = 1
+    assert "Valid fields" in str(exc.value)
+
+
+def test_setattr_internal_raw_allowed():
+    row = Struct(["hp"], hp=10)
+    row._raw = {"hp": 1}
+    assert row._raw == {"hp": 1}

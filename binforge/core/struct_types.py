@@ -1,3 +1,4 @@
+import difflib
 from dataclasses import dataclass
 from typing import Any
 
@@ -46,6 +47,27 @@ class Struct:
         self._raw: dict[str, int] = {}
         for k, v in kwargs.items():
             setattr(self, k, v)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Set a field value, rejecting names that are not known fields.
+
+        Internal (underscore-prefixed) names are always allowed so that
+        ``_fields``/``_raw`` can be set during ``__init__``.
+
+        :param name: Attribute name to set.
+        :param value: Value to assign.
+        :raises AttributeError: If ``name`` is not a known field, with the
+            closest matching field name suggested when one exists.
+        """
+        if name.startswith("_") or name in self.__dict__.get("_fields", ()):
+            object.__setattr__(self, name, value)
+            return
+        fields = self.__dict__.get("_fields", [])
+        matches = difflib.get_close_matches(name, fields, n=1)
+        hint = f" Did you mean '{matches[0]}'?" if matches else ""
+        raise AttributeError(
+            f"Struct has no field '{name}'.{hint} Valid fields: {', '.join(fields)}"
+        )
 
     def __repr__(self) -> str:
         parts: list[str] = []

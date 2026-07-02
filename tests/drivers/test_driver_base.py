@@ -272,3 +272,68 @@ def test_pack_table_longer_string_raises() -> None:
     rows[0].name_ptr = "Lynn"  # 4 chars + null = 5 bytes > 4-byte span
     with pytest.raises(PatchSizeError, match="longer than existing string span"):
         drv.pack_table("chars", rows)
+
+
+# ── view() ───────────────────────────────────────────────────────────────────
+
+
+def test_view_default_byte_fields():
+    drv, p = _make_driver([(20, 4, 5, 3, 100, 1)])
+    rows = drv.view(0, 4, 1)
+    assert rows[0].b0 == 20
+    assert rows[0].b1 == 4
+    assert rows[0].b2 == 5
+    assert rows[0].b3 == 3
+    p.unlink()
+
+
+def test_view_custom_fields_u16_endianness():
+    drv, p = _make_driver([(20, 4, 5, 3, 0x1234, 1)])
+    fields = [Field("hp", u8, 0), Field("exp", u16, 4)]
+    rows = drv.view(0, 8, 1, fields=fields)
+    assert rows[0].hp == 20
+    assert rows[0].exp == 0x1234  # little-endian
+    p.unlink()
+
+
+def test_view_clamps_count():
+    drv, p = _make_driver([(20, 4, 5, 3, 100, 1)])  # 8 bytes total
+    rows = drv.view(0, 8, 100)
+    assert len(rows) == 1
+    rows = drv.view(4, 8, 100)  # only 4 bytes left: partial row dropped
+    assert rows == []
+    p.unlink()
+
+
+# ── deref() ──────────────────────────────────────────────────────────────────
+
+
+def test_deref_returns_hexdump():
+    drv, p = _make_driver([(0xAB, 0xCD, 5, 3, 100, 1)])
+    out = drv.deref(0, length=8)
+    assert "ab cd" in out
+    p.unlink()
+
+
+def test_deref_out_of_range_raises():
+    from binforge.errors import PointerRangeError
+
+    drv, p = _make_driver([(1, 2, 3, 4, 5, 6)])
+    with pytest.raises(PointerRangeError):
+        drv.deref(0x0FFFFFFF)
+    p.unlink()
+
+
+def test_deref_with_text_codec_appends_decoded_line():
+    import tempfile
+
+    class _TextDriver(_TestDriver):
+        TEXT_CODEC = TextCodec({0x41: "H", 0x42: "i"})
+
+    data = bytes([0x41, 0x42, 0x00, 0xFF])
+    path = Path(tempfile.mktemp(suffix=".bin"))
+    path.write_bytes(data)
+    drv = _TextDriver(BinaryBuffer(path))
+    out = drv.deref(0, length=4)
+    assert "text: 'Hi'" in out
+    path.unlink()

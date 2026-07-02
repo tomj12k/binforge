@@ -6,7 +6,7 @@ from typing import Any
 
 from binforge.core.engine import BinaryBuffer
 from binforge.core.pointer import PointerTable
-from binforge.core.struct_types import FieldType, Struct, TableDef
+from binforge.core.struct_types import Field, FieldType, Struct, TableDef, u8
 from binforge.core.text import TextCodec
 from binforge.errors import PatchSizeError, PointerRangeError, TableNotFoundError
 
@@ -47,6 +47,65 @@ class FormatDriver(ABC):
             row._raw = dict(self._pending_raw)
             rows.append(row)
         return rows
+
+    def view(
+        self,
+        offset: int,
+        row_size: int,
+        count: int,
+        fields: list[Field] | None = None,
+    ) -> list[Struct]:
+        """Parse an ad-hoc table without a TableDef, for hypothesis testing.
+
+        READ-ONLY: the returned rows cannot be packed back, since
+        ``pack_table`` requires a named TableDef. ``count`` is clamped so
+        that partial rows past the end of the buffer are dropped instead of
+        raising mid-exploration.
+
+        :param offset: ROM address of the table start (resolved via the
+            driver's pointer table, same semantics as ``TableDef.offset``).
+        :param row_size: Size of each row in bytes.
+        :param count: Number of rows to parse (clamped to buffer bounds).
+        :param fields: Optional field layout; if ``None``, one u8 field per
+            byte is synthesized (``b0`` .. ``b{row_size-1}``).
+        :returns: List of parsed rows.
+        """
+        file_offset = self._ptr.resolve(offset)
+        if fields is None:
+            fields = [Field(f"b{i}", u8, i) for i in range(row_size)]
+        max_rows = max(0, (len(self._buf) - file_offset) // row_size)
+        count = min(count, max_rows)
+        rows: list[Struct] = []
+        for i in range(count):
+            row_start = file_offset + i * row_size
+            self._pending_raw = {}
+            kwargs: dict[str, Any] = {}
+            for f in fields:
+                kwargs[f.name] = self._read_field(row_start + f.offset, f.ftype, f.name)
+            row = Struct(list(kwargs.keys()), **kwargs)
+            row._raw = dict(self._pending_raw)
+            rows.append(row)
+        return rows
+
+    def deref(self, ptr: int, length: int = 64) -> str:
+        """Follow a pointer and return a hexdump of the target bytes.
+
+        If the driver has a ``TEXT_CODEC``, a decoded C-string preview is
+        appended as a second line: ``text: '<decoded>'``.
+
+        :param ptr: ROM address to dereference via the driver's pointer table.
+        :param length: Number of bytes to dump.
+        :returns: Hexdump text, optionally followed by a decoded-text line.
+        :raises PointerRangeError: If the pointer resolves outside the buffer.
+        """
+        file_off = self._ptr.resolve(ptr)
+        if not (0 <= file_off < len(self._buf)):
+            raise PointerRangeError(ptr, len(self._buf))
+        out = self._buf.hexdump(file_off, length)
+        if self.TEXT_CODEC is not None:
+            decoded = self.TEXT_CODEC.decode_bytes(self._buf.read_cstring(file_off))
+            out += f"\ntext: '{decoded}'"
+        return out
 
     def pack_table(self, name: str, rows: list[Struct]) -> None:
         tdef = self.tables().get(name)
