@@ -1,4 +1,4 @@
-import struct as _struct
+import pytest
 from pathlib import Path
 from binforge.core.engine import BinaryBuffer
 
@@ -146,3 +146,34 @@ def test_fe13_parse_classes() -> None:
     assert len(rows) == 66
     assert rows[0].id == 7
     assert rows[0].move == 5
+
+
+def test_fe13_pack_classes_routes_to_jobdata() -> None:
+    """pack_table("classes") must edit JobData.bin and leave Person.bin untouched."""
+    from binforge.drivers.n3ds.fe13 import FE13Driver
+
+    buf = _make_fe13_buf_with_jobs()
+    drv = FE13Driver(buf)
+    chars_before = drv.parse_table("characters")
+    rows = drv.parse_table("classes")
+    rows[0].move = 9
+    drv.pack_table("classes", rows)
+
+    drv2 = FE13Driver(buf)
+    classes_after = drv2.parse_table("classes")
+    assert classes_after[0].move == 9
+    assert classes_after[0].id == 7
+    chars_after = drv2.parse_table("characters")
+    for before, after in zip(chars_before, chars_after, strict=True):
+        assert before.hp == after.hp
+        assert before.name_hash == after.name_hash
+
+
+def test_fe13_pack_unknown_table_raises() -> None:
+    from binforge.drivers.n3ds.fe13 import FE13Driver
+    from binforge.errors import TableNotFoundError
+
+    buf = _make_fe13_buf_with_jobs()
+    drv = FE13Driver(buf)
+    with pytest.raises(TableNotFoundError):
+        drv.pack_table("nonexistent", [])

@@ -9,7 +9,7 @@ from binforge.core.struct_types import Field, TableDef, u8, u32
 from binforge.drivers.base import FormatDriver
 from binforge.drivers.n3ds.romfs import RomFS
 from binforge.drivers.n3ds.romfs_builder import RomFSBuilder
-from binforge.errors import DecompressionError
+from binforge.errors import DecompressionError, TableNotFoundError
 from binforge.registry import register
 
 _PERSON_PATH = "GameData/Person.bin.lz"
@@ -118,27 +118,32 @@ class FE13Driver(FormatDriver):
     def pack_table(self, name: str, rows: list) -> None:  # type: ignore[override]
         """Pack edits and rebuild the ROMFS container.
 
-        Serialises *rows* into the decompressed Person.bin staging buffer,
-        recompresses it, then rebuilds the full IVFC-wrapped ROMFS blob so
-        subsequent :meth:`parse_table` calls see the updated data.
+        Serialises *rows* into the decompressed staging buffer for the table's
+        ROMFS file (e.g. Person.bin for ``"characters"``, JobData.bin for
+        ``"classes"``), recompresses it, then rebuilds the full IVFC-wrapped
+        ROMFS blob so subsequent :meth:`parse_table` calls see the updated data.
 
-        :param name: Table name (must be ``"characters"``).
+        :param name: Table name (must exist in ``_TABLE_PATHS``).
         :param rows: Row objects previously returned by :meth:`parse_table`.
+        :raises TableNotFoundError: If *name* has no registered ROMFS path.
         """
-        person_data = bytearray(self._get_lz_data(self._PERSON_PATH))
-        person_buf = BinaryBuffer.__new__(BinaryBuffer)
-        person_buf._path = Path("Person.bin")
-        person_buf._shadow = person_data
+        romfs_path = self._TABLE_PATHS.get(name)
+        if romfs_path is None:
+            raise TableNotFoundError(name)
+        table_data = bytearray(self._get_lz_data(romfs_path))
+        table_buf = BinaryBuffer.__new__(BinaryBuffer)
+        table_buf._path = Path(romfs_path.split("/")[-1].removesuffix(".lz"))
+        table_buf._shadow = table_data
         old_buf = self._buf
-        self._buf = person_buf
+        self._buf = table_buf
         try:
             super().pack_table(name, rows)
         finally:
             self._buf = old_buf
-        new_compressed = compress_lz11(bytes(person_data))
-        new_romfs = self._rebuild_romfs({self._PERSON_PATH: new_compressed})
+        new_compressed = compress_lz11(bytes(table_data))
+        new_romfs = self._rebuild_romfs({romfs_path: new_compressed})
         self._buf._shadow = bytearray(new_romfs)
-        self._lz_cache[self._PERSON_PATH] = bytes(person_data)
+        self._lz_cache[romfs_path] = bytes(table_data)
 
     def _rebuild_romfs(self, modified: dict[str, bytes | None]) -> bytes:
         """Extract all files from the current ROMFS, merge modifications, rebuild.

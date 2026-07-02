@@ -8,7 +8,7 @@ from binforge.core.engine import BinaryBuffer
 from binforge.core.pointer import PointerTable
 from binforge.core.struct_types import FieldType, Struct, TableDef
 from binforge.core.text import TextCodec
-from binforge.errors import PatchSizeError, TableNotFoundError
+from binforge.errors import PatchSizeError, PointerRangeError, TableNotFoundError
 
 
 class FormatDriver(ABC):
@@ -115,16 +115,34 @@ class FormatDriver(ABC):
                 big = self.ENDIAN == "big"
                 raw_ptr = self._buf.read_u32(offset, big=big)
                 file_off = self._ptr.resolve(raw_ptr)
-                if 0 <= file_off < len(self._buf._shadow):
-                    existing_len = 0
-                    while 0 <= file_off + existing_len < len(self._buf._shadow):
-                        if self._buf.read_u8(file_off + existing_len) == 0x00:
-                            existing_len += 1
-                            break
+                if not (0 <= file_off < len(self._buf._shadow)):
+                    if value == "":
+                        # Round-trip of a null/out-of-range pointer: parse
+                        # decoded it to "" and nothing was edited — no-op.
+                        return
+                    raise PointerRangeError(raw_ptr, len(self._buf._shadow))
+                existing_len = 0
+                while 0 <= file_off + existing_len < len(self._buf._shadow):
+                    if self._buf.read_u8(file_off + existing_len) == 0x00:
                         existing_len += 1
-                    if len(encoded) != existing_len:
-                        raise PatchSizeError(file_off, len(encoded), existing_len)
-                    self._buf.patch(file_off, encoded)
+                        break
+                    existing_len += 1
+                if len(encoded) > existing_len:
+                    raise PatchSizeError(
+                        file_off,
+                        len(encoded),
+                        existing_len,
+                        message=(
+                            f"encoded string ({len(encoded)} bytes) longer than "
+                            f"existing string span ({existing_len} bytes) "
+                            f"at 0x{file_off:08X}"
+                        ),
+                    )
+                # Shorter/equal replacement: encoded already ends with the
+                # null terminator; zero-pad the rest of the old span.
+                self._buf.patch(
+                    file_off, encoded + b"\x00" * (existing_len - len(encoded))
+                )
             elif isinstance(value, int):
                 big = self.ENDIAN == "big"
                 packed = _struct.pack(f"{'>' if big else '<'}I", value)

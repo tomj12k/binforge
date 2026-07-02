@@ -18,9 +18,12 @@ class DriverNotFoundError(BinforgeError):
 class PatchSizeError(BinforgeError):
     """Raised when a patch exceeds file bounds."""
 
-    def __init__(self, offset: int, patch_len: int, file_size: int) -> None:
+    def __init__(
+        self, offset: int, patch_len: int, file_size: int, message: str | None = None
+    ) -> None:
         super().__init__(
-            f"Patch at 0x{offset:08X} ({patch_len} bytes) exceeds file size {file_size}"
+            message
+            or f"Patch at 0x{offset:08X} ({patch_len} bytes) exceeds file size {file_size}"
         )
 
 

@@ -216,3 +216,59 @@ def test_str_ptr_raw_preserved_without_text_codec() -> None:
     assert rows[0].name_ptr == 0x08000200
     # _pending_raw should be populated with the raw pointer value
     assert rows[0]._raw.get("name_ptr") == 0x08000200
+
+
+# ── str_ptr write-path error handling ────────────────────────────────────────
+
+
+def test_pack_table_null_pointer_write_raises() -> None:
+    """Editing a string whose pointer is null must raise PointerRangeError."""
+    from binforge.errors import PointerRangeError
+
+    buf, Drv = _make_str_ptr_driver_buf()
+    _struct.pack_into("<I", buf._shadow, 0x100, 0x00000000)  # null pointer
+    drv = Drv(buf)
+    rows = drv.parse_table("chars")
+    rows[0].name_ptr = "Lyn"
+    with pytest.raises(PointerRangeError):
+        drv.pack_table("chars", rows)
+
+
+def test_pack_table_out_of_range_pointer_write_raises() -> None:
+    """Editing a string whose pointer is out of range must raise PointerRangeError."""
+    from binforge.errors import PointerRangeError
+
+    buf, Drv = _make_str_ptr_driver_buf()
+    _struct.pack_into("<I", buf._shadow, 0x100, _GBA_BASE + 0x10000)  # past EOF
+    drv = Drv(buf)
+    rows = drv.parse_table("chars")
+    rows[0].name_ptr = "Lyn"
+    with pytest.raises(PointerRangeError):
+        drv.pack_table("chars", rows)
+
+
+def test_pack_table_shorter_string_roundtrips() -> None:
+    """A shorter replacement string is written, null-terminated, and padded."""
+    buf, Drv = _make_str_ptr_driver_buf()
+    drv = Drv(buf)
+    rows = drv.parse_table("chars")
+    rows[0].name_ptr = "Ly"  # 2 chars + null = 3 bytes < 4-byte span
+    drv.pack_table("chars", rows)
+    drv2 = Drv(buf)
+    rows2 = drv2.parse_table("chars")
+    assert rows2[0].name_ptr == "Ly"
+    # remainder of old span zero-padded
+    assert buf._shadow[0x202] == 0x00
+    assert buf._shadow[0x203] == 0x00
+
+
+def test_pack_table_longer_string_raises() -> None:
+    """A longer replacement string must raise PatchSizeError."""
+    from binforge.errors import PatchSizeError
+
+    buf, Drv = _make_str_ptr_driver_buf()
+    drv = Drv(buf)
+    rows = drv.parse_table("chars")
+    rows[0].name_ptr = "Lynn"  # 4 chars + null = 5 bytes > 4-byte span
+    with pytest.raises(PatchSizeError, match="longer than existing string span"):
+        drv.pack_table("chars", rows)
